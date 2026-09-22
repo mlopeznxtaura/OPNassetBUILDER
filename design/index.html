@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GameForge — Design &amp; Visualize</title>
+<style>
+  :root { --bg:#111318; --panel:#1a1d24; --line:#2a2e38; --text:#e8e9ec; --accent:#5cc8ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); display:flex; height:100vh; overflow:hidden; }
+  #sidebar { width:300px; background:var(--panel); border-right:1px solid var(--line); padding:14px; overflow-y:auto; flex-shrink:0; }
+  #main { flex:1; display:flex; flex-direction:column; }
+  #toolbar { display:flex; gap:8px; padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line); align-items:center; flex-wrap:wrap; }
+  #viewport { flex:1; position:relative; }
+  #viewport canvas { display:block; }
+  h1 { font-size:15px; margin:0 0 12px; color:var(--accent); }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#9aa1ad; margin:18px 0 8px; }
+  label { font-size:12px; color:#9aa1ad; display:block; margin:8px 0 4px; }
+  input[type=text], input[type=number], select { width:100%; background:#0f1115; border:1px solid var(--line); color:var(--text); padding:6px 8px; border-radius:6px; font-size:13px; }
+  input[type=color] { width:36px; height:28px; border:none; background:none; padding:0; cursor:pointer; }
+  button { background:#232833; color:var(--text); border:1px solid var(--line); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:12px; }
+  button:hover { background:#2c3240; }
+  button.primary { background:var(--accent); color:#08131a; border-color:var(--accent); font-weight:600; }
+  button.primary:hover { filter:brightness(1.08); }
+  button.danger:hover { background:#4a1f24; border-color:#7a2d34; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .asset-item { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid transparent; }
+  .asset-item:hover { background:#20242e; }
+  .asset-item.active { border-color:var(--accent); background:#182430; }
+  .asset-item .kind-tag { font-size:9px; padding:2px 5px; border-radius:4px; background:#2a2e38; color:#9aa1ad; }
+  #palette { display:flex; flex-wrap:wrap; gap:5px; }
+  .swatch { width:22px; height:22px; border-radius:4px; border:2px solid transparent; cursor:pointer; }
+  .swatch.active { border-color:#fff; }
+  #spriteGrid { display:grid; image-rendering:pixelated; border:1px solid var(--line); cursor:crosshair; margin-top:6px; }
+  #spriteGrid div { }
+  .pixel-cell { width:16px; height:16px; }
+  .hint { font-size:11px; color:#6b7280; line-height:1.5; margin-top:6px; }
+  .badge { background:#182430; color:var(--accent); font-size:10px; padding:2px 6px; border-radius:10px; }
+  #layerCtl { display:flex; align-items:center; gap:8px; }
+  a.navlink { color:var(--accent); text-decoration:none; font-size:12px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>⚒ GameForge — Design</h1>
+  <div class="row" style="justify-content:space-between">
+    <span class="badge">Stage 1 / 2</span>
+    <a class="navlink" href="../world/index.html">Go to World Viewer →</a>
+  </div>
+
+  <h2>New Asset</h2>
+  <label>Name</label>
+  <input type="text" id="assetName" placeholder="crate, tree, goblin...">
+  <label>Kind</label>
+  <select id="assetKind">
+    <option value="voxel">Voxel model (3D)</option>
+    <option value="sprite">Sprite (2D pixel art)</option>
+  </select>
+  <div id="voxelSizeCtl">
+    <label>Grid size (X × Y × Z)</label>
+    <div class="row">
+      <input type="number" id="vx" value="6" min="1" max="24">
+      <input type="number" id="vy" value="6" min="1" max="24">
+      <input type="number" id="vz" value="6" min="1" max="24">
+      <button id="btnResizeVoxel">Set</button>
+    </div>
+  </div>
+  <div id="spriteSizeCtl" style="display:none">
+    <label>Sprite size (W × H)</label>
+    <div class="row">
+      <input type="number" id="sw" value="16" min="1" max="64">
+      <input type="number" id="sh" value="16" min="1" max="64">
+      <button id="btnResizeSprite">Set</button>
+    </div>
+  </div>
+
+  <label>Collidable in world</label>
+  <input type="checkbox" id="assetCollidable" checked style="width:auto">
+
+  <h2>Palette</h2>
+  <div class="row">
+    <input type="color" id="colorPick" value="#e05252">
+    <button id="btnAddSwatch">+ Add to palette</button>
+  </div>
+  <div id="palette"></div>
+  <div class="hint">Left click = paint. Right click = erase. Voxel mode: use layer slider to paint each Y layer.</div>
+
+  <div id="layerCtl" style="display:none">
+    <label style="margin-top:12px">Y layer: <span id="layerVal">0</span></label>
+    <input type="range" id="layerSlider" min="0" max="5" value="0" style="width:100%">
+  </div>
+
+  <div id="spriteEditorWrap" style="display:none">
+    <div id="spriteGrid"></div>
+  </div>
+
+  <div class="row" style="margin-top:16px">
+    <button class="primary" id="btnSave">💾 Save to library</button>
+  </div>
+
+  <h2>Library <span id="libCount" class="badge">0</span></h2>
+  <div id="assetList"></div>
+  <div class="row" style="margin-top:10px">
+    <button id="btnExportAll">Export library.json</button>
+    <button id="btnImport">Import</button>
+    <input type="file" id="fileImport" accept=".json" style="display:none">
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button id="btnDelete" class="danger">Delete selected</button>
+    <button id="btnDuplicate">Duplicate</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="toolbar">
+    <span style="font-size:12px;color:#9aa1ad">Live preview — orbit: drag, zoom: scroll</span>
+  </div>
+  <div id="viewport"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+<script src="../shared/assetFormat.js"></script>
+<script src="../shared/voxelMesh.js"></script>
+<script>
+// ---------- three.js preview scene ----------
+const viewport = document.getElementById('viewport');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14161c);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+camera.position.set(8, 8, 8);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+viewport.appendChild(renderer.domElement);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1, 0);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x33363f, 1.0));
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(5, 10, 5);
+scene.add(dir);
+const grid = new THREE.GridHelper(20, 20, 0x333846, 0x22252e);
+scene.add(grid);
+
+let previewGroup = null;
+function setPreview(obj) {
+  if (previewGroup) scene.remove(previewGroup);
+  previewGroup = obj;
+  if (obj) scene.add(obj);
+}
+
+function resize() {
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+// ---------- editor state ----------
+let current = newVoxelDraft();
+let palette = ['#e05252', '#e0a852', '#6fbf6f', '#5c9fe0', '#c15cff', '#ffffff', '#333333'];
+let activeColor = palette[0];
+
+function newVoxelDraft() {
+  return {
+    id: gfNewId(),
+    name: '',
+    kind: 'voxel',
+    collidable: true,
+    voxel: { size: [6, 6, 6], cellSize: 1, voxels: [] },
+    createdAt: Date.now()
+  };
+}
+function newSpriteDraft() {
+  return {
+    id: gfNewId(),
+    name: '',
+    kind: 'sprite',
+    collidable: false,
+    sprite: { w: 16, h: 16, pixels: new Array(16 * 16).fill('') },
+    createdAt: Date.now()
+  };
+}
+
+function renderPalette() {
+  const el = document.getElementById('palette');
+  el.innerHTML = '';
+  palette.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (c === activeColor ? ' active' : '');
+    sw.style.background = c;
+    sw.onclick = () => { activeColor = c; renderPalette(); };
+    el.appendChild(sw);
+  });
+}
+document.getElementById('btnAddSwatch').onclick = () => {
+  const c = document.getElementById('colorPick').value;
+  if (!palette.includes(c)) palette.push(c);
+  activeColor = c;
+  renderPalette();
+};
+renderPalette();
+
+// ---- voxel grid editing via raycast onto layer plane ----
+let layerY = 0;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let voxelHelperGroup = new THREE.Group();
+scene.add(voxelHelperGroup);
+
+function voxelKey(x, y, z) { return x + '_' + y + '_' + z; }
+
+function rebuildVoxelPreview() {
+  voxelHelperGroup.clear();
+  const asset = current;
+  const group = gfBuildVoxelMesh({ voxel: asset.voxel, name: 'draft' });
+  setPreview(group);
+  // layer plane indicator
+  const [sx, , sz] = asset.voxel.size;
+  const planeGeo = new THREE.PlaneGeometry(sx, sz);
+  const planeMat = new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide });
+  const plane = new THREE.Mesh(planeGeo, planeMat);
+  plane.rotation.x = -Math.PI / 2;
+  plane.position.set((sx - 1) / 2 * 0, layerY, 0);
+  plane.userData.isLayerPlane = true;
+  plane.position.set(0, layerY - ( // align with voxel group's floor-based recenter approximation
+    Math.min(...(asset.voxel.voxels.map(v=>v.y)).concat([0]))
+  ), 0);
+  voxelHelperGroup.add(plane);
+}
+
+function rebuildSpritePreview() {
+  const group = gfBuildSpriteMesh({ sprite: current.sprite, name: 'draft' });
+  setPreview(group);
+}
+
+function paintVoxelAt(gridX, gridZ, erase) {
+  const { size, voxels } = current.voxel;
+  if (gridX < 0 || gridX >= size[0] || gridZ < 0 || gridZ >= size[2]) return;
+  const idx = voxels.findIndex(v => v.x === gridX && v.y === layerY && v.z === gridZ);
+  if (erase) {
+    if (idx >= 0) voxels.splice(idx, 1);
+  } else {
+    if (idx >= 0) voxels[idx].c = activeColor;
+    else voxels.push({ x: gridX, y: layerY, z: gridZ, c: activeColor });
+  }
+  rebuildVoxelPreview();
+}
+
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (current.kind !== 'voxel') return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const plane = voxelHelperGroup.children.find(c => c.userData.isLayerPlane);
+  if (!plane) return;
+  const hits = raycaster.intersectObject(plane);
+  if (!hits.length) return;
+  const p = hits[0].point;
+  const [sx, , sz] = current.voxel.size;
+  const gridX = Math.floor(p.x + sx / 2);
+  const gridZ = Math.floor(p.z + sz / 2);
+  paintVoxelAt(gridX, gridZ, e.button === 2);
+});
+
+// ---- sprite grid editing ----
+function rebuildSpriteGrid() {
+  const { w, h, pixels } = current.sprite;
+  const el = document.getElementById('spriteGrid');
+  el.style.gridTemplateColumns = `repeat(${w}, 16px)`;
+  el.innerHTML = '';
+  let painting = false, erasing = false;
+  for (let i = 0; i < w * h; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'pixel-cell';
+    cell.style.background = pixels[i] || 'repeating-conic-gradient(#2a2e38 0% 25%, #1a1d24 0% 50%) 50%/8px 8px';
+    cell.dataset.i = i;
+    cell.addEventListener('pointerdown', (e) => {
+      painting = true; erasing = e.button === 2;
+      paintPixel(i, erasing);
+    });
+    cell.addEventListener('pointerenter', () => { if (painting) paintPixel(i, erasing); });
+    el.appendChild(cell);
+  }
+  window.onpointerup = () => painting = false;
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+function paintPixel(i, erase) {
+  current.sprite.pixels[i] = erase ? '' : activeColor;
+  rebuildSpriteGrid();
+  rebuildSpritePreview();
+}
+
+// ---- kind switch / resize ----
+function switchKind(kind) {
+  current = kind === 'voxel' ? newVoxelDraft() : newSpriteDraft();
+  document.getElementById('assetKind').value = kind;
+  refreshModeUI();
+}
+function refreshModeUI() {
+  const isVoxel = current.kind === 'voxel';
+  document.getElementById('voxelSizeCtl').style.display = isVoxel ? '' : 'none';
+  document.getElementById('spriteSizeCtl').style.display = isVoxel ? 'none' : '';
+  document.getElementById('layerCtl').style.display = isVoxel ? '' : 'none';
+  document.getElementById('spriteEditorWrap').style.display = isVoxel ? 'none' : '';
+  if (isVoxel) {
+    document.getElementById('layerSlider').max = current.voxel.size[1] - 1;
+    rebuildVoxelPreview();
+  } else {
+    rebuildSpriteGrid();
+    rebuildSpritePreview();
+  }
+}
+document.getElementById('assetKind').onchange = (e) => switchKind(e.target.value);
+
+document.getElementById('btnResizeVoxel').onclick = () => {
+  const x = +document.getElementById('vx').value, y = +document.getElementById('vy').value, z = +document.getElementById('vz').value;
+  current.voxel.size = [x, y, z];
+  current.voxel.voxels = current.voxel.voxels.filter(v => v.x < x && v.y < y && v.z < z);
+  document.getElementById('layerSlider').max = y - 1;
+  layerY = Math.min(layerY, y - 1);
+  rebuildVoxelPreview();
+};
+document.getElementById('btnResizeSprite').onclick = () => {
+  const w = +document.getElementById('sw').value, h = +document.getElementById('sh').value;
+  const old = current.sprite;
+  const px = new Array(w * h).fill('');
+  for (let y = 0; y < Math.min(h, old.h); y++)
+    for (let x = 0; x < Math.min(w, old.w); x++)
+      px[y * w + x] = old.pixels[y * old.w + x] || '';
+  current.sprite = { w, h, pixels: px };
+  rebuildSpriteGrid();
+  rebuildSpritePreview();
+};
+document.getElementById('layerSlider').oninput = (e) => {
+  layerY = +e.target.value;
+  document.getElementById('layerVal').textContent = layerY;
+  rebuildVoxelPreview();
+};
+
+// ---- library list / save / delete / duplicate / import / export ----
+let selectedLibId = null;
+function refreshLibraryList() {
+  const lib = gfLoadLibrary();
+  document.getElementById('libCount').textContent = lib.assets.length;
+  const el = document.getElementById('assetList');
+  el.innerHTML = '';
+  lib.assets.forEach(a => {
+    const item = document.createElement('div');
+    item.className = 'asset-item' + (a.id === selectedLibId ? ' active' : '');
+    const name = document.createElement('span');
+    name.textContent = a.name || '(unnamed)';
+    const kind = document.createElement('span');
+    kind.className = 'kind-tag';
+    kind.textContent = a.kind;
+    item.append(name, kind);
+    item.onclick = () => {
+      selectedLibId = a.id;
+      current = JSON.parse(JSON.stringify(a));
+      document.getElementById('assetName').value = current.name;
+      document.getElementById('assetCollidable').checked = current.collidable;
+      document.getElementById('assetKind').value = current.kind;
+      refreshModeUI();
+      refreshLibraryList();
+    };
+    el.appendChild(item);
+  });
+}
+
+document.getElementById('btnSave').onclick = () => {
+  current.name = document.getElementById('assetName').value.trim() || 'unnamed';
+  current.collidable = document.getElementById('assetCollidable').checked;
+  const errs = gfValidateAsset(current);
+  if (errs.length) { alert('Cannot save: ' + errs.join(', ')); return; }
+  gfUpsertAsset(current);
+  selectedLibId = current.id;
+  refreshLibraryList();
+};
+
+document.getElementById('btnDelete').onclick = () => {
+  if (!selectedLibId) { alert('Select an asset from the library first.'); return; }
+  gfDeleteAsset(selectedLibId);
+  selectedLibId = null;
+  refreshLibraryList();
+};
+
+document.getElementById('btnDuplicate').onclick = () => {
+  if (!selectedLibId) { alert('Select an asset from the library first.'); return; }
+  const clone = JSON.parse(JSON.stringify(current));
+  clone.id = gfNewId();
+  clone.name = clone.name + ' copy';
+  gfUpsertAsset(clone);
+  refreshLibraryList();
+};
+
+document.getElementById('btnExportAll').onclick = () => {
+  gfDownloadJSON(gfLoadLibrary(), 'gameforge-library.json');
+};
+document.getElementById('btnImport').onclick = () => document.getElementById('fileImport').click();
+document.getElementById('fileImport').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const data = await gfReadFileAsJSON(file);
+  const lib = gfLoadLibrary();
+  const incoming = data.assets ? data.assets : [data];
+  incoming.forEach(a => {
+    if (!a.id) a.id = gfNewId();
+    const idx = lib.assets.findIndex(x => x.id === a.id);
+    if (idx >= 0) lib.assets[idx] = a; else lib.assets.push(a);
+  });
+  gfSaveLibrary(lib);
+  refreshLibraryList();
+  e.target.value = '';
+};
+
+refreshModeUI();
+refreshLibraryList();
+</script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+{
+  "project": "GameForge",
+  "version": 1,
+  "description": "Open-source two-stage (design/visualize -> render/test) game asset pipeline. Gaps below are the delta between this delivered baseline and a production-grade tool.",
+  "delivered": [
+    "shared/assetFormat.js: asset+library+level schema, localStorage CRUD, JSON import/export",
+    "shared/voxelMesh.js: voxel -> InstancedMesh builder, sprite -> billboard Sprite builder",
+    "design/index.html: voxel editor (layered grid paint/erase) + sprite editor (pixel grid paint/erase), live 3D preview, palette, library list, save/duplicate/delete/import/export",
+    "world/index.html: ground plane, asset placement by click, placement select/delete, orbit camera, WASD pointer-lock fly camera, flat circle-collision against collidable placements, level save/load"
+  ],
+  "gaps": [
+    {
+      "id": "gap1",
+      "title": "Greedy voxel meshing",
+      "tasks": [
+        {
+          "id": "task1",
+          "desc": "Replace per-color InstancedMesh in gfBuildVoxelMesh (shared/voxelMesh.js) with greedy-meshed BufferGeometry: merge coplanar same-color voxel faces into quads to cut triangle count for large models."
+        },
+        {
+          "id": "task2",
+          "desc": "Add a vertex-color path so a single merged geometry can hold multiple voxel colors instead of one InstancedMesh per color."
+        }
+      ],
+      "tests": [
+        {
+          "id": "test1",
+          "desc": "Build a 10x1x10 solid-color voxel slab. Assert the greedy mesher produces 1 quad (2 triangles) per exposed face direction (6 total) instead of 100 boxes worth of geometry.",
+          "type": "unit",
+          "how": "In a Node or browser test harness, call gfBuildVoxelMesh on a synthetic asset, inspect the resulting BufferGeometry's index/position count."
+        },
+        {
+          "id": "test2",
+          "desc": "Load a voxel asset with two colors in a checkerboard pattern and confirm visually/by vertex-color buffer that both colors render correctly with no missing faces.",
+          "type": "manual",
+          "how": "Open design/index.html, build a checkerboard voxel asset, verify preview render matches painted pattern."
+        }
+      ]
+    },
+    {
+      "id": "gap2",
+      "title": "Real collision (AABB + vertical)",
+      "tasks": [
+        {
+          "id": "task1",
+          "desc": "Replace circle-radius collision in world/index.html's collides() with per-placement AABB computed from the asset's actual bounding box (rotation-aware oriented box or conservative AABB)."
+        },
+        {
+          "id": "task2",
+          "desc": "Add vertical collision/step-up so the fly camera can walk onto low objects (e.g. stairs) and is blocked by tall ones, instead of always clamping camera.y to a fixed eye height."
+        }
+      ],
+      "tests": [
+        {
+          "id": "test1",
+          "desc": "Place a 1x1x1 collidable voxel box at origin; assert player cannot move camera position inside the box's world-space AABB from any of the 4 cardinal approach directions.",
+          "type": "manual",
+          "how": "In world/index.html fly mode, walk into a placed crate from N/S/E/W and confirm the camera stops at the box edge, not a circular buffer around it."
+        },
+        {
+          "id": "test2",
+          "desc": "Place a voxel asset 0.25 units tall next to the player start; confirm the player can walk over it once step-up is implemented (no hard stop).",
+          "type": "manual"
+        }
+      ]
+    },
+    {
+      "id": "gap3",
+      "title": "Voxel face texturing",
+      "tasks": [
+        {
+          "id": "task1",
+          "desc": "Extend the Asset schema (shared/assetFormat.js) with optional per-voxel-face texture references (e.g. atlas UV rect) instead of solid fill color only."
+        },
+        {
+          "id": "task2",
+          "desc": "Add a texture-atlas painting mode to design/index.html: let the user assign a small pattern/texture swatch (not just a flat color) to a voxel face."
+        }
+      ],
+      "tests": [
+        {
+          "id": "test1",
+          "desc": "gfValidateAsset() accepts a voxel asset whose voxels include an optional `tex` field alongside `c`, and gfBuildVoxelMesh renders the texture on at least the +Y face.",
+          "type": "unit"
+        },
+        {
+          "id": "test2",
+          "desc": "Create a textured voxel asset in the editor, export it, re-import into a fresh library, confirm the texture reference round-trips.",
+          "type": "manual"
+        }
+      ]
+    },
+    {
+      "id": "gap4",
+      "title": "NPC / simple AI actors",
+      "tasks": [
+        {
+          "id": "task1",
+          "desc": "Add an `actor` placement type (distinct from static placements) with a basic state machine (idle/wander/chase) driven by a fixed per-frame update loop in world/index.html."
+        },
+        {
+          "id": "task2",
+          "desc": "Give actors a simple steering behavior (seek/wander) using existing placement AABB/collision data so they don't walk through collidable placements."
+        }
+      ],
+      "tests": [
+        {
+          "id": "test1",
+          "desc": "Place one actor asset with 'wander' behavior; over 30s of simulated time confirm its position changes and it never enters a collidable placement's bounds.",
+          "type": "manual",
+          "how": "Add temporary console logging of actor.position and collidable overlap checks each frame; watch console for 30s."
+        },
+        {
+          "id": "test2",
+          "desc": "Unit test the steering function in isolation: given actor position, target position, and obstacle list, assert output velocity vector points away from any obstacle within avoidance radius.",
+          "type": "unit"
+        }
+      ]
+    },
+    {
+      "id": "gap5",
+      "title": "Multiplayer/networked sync",
+      "tasks": [
+        {
+          "id": "task1",
+          "desc": "Define a minimal WebSocket wire protocol (JSON messages: join, placementAdded, placementRemoved, playerMoved) as a new shared/net.js module."
+        },
+        {
+          "id": "task2",
+          "desc": "Wire world/index.html to broadcast local placement/camera changes over the protocol and apply remote peers' changes to the scene, without changing the single-player code path when no server is configured."
+        }
+      ],
+      "tests": [
+        {
+          "id": "test1",
+          "desc": "With a stub WebSocket server echoing messages, confirm a placement added in one browser tab appears in a second tab connected to the same room within 1s.",
+          "type": "integration",
+          "how": "Requires a WebSocket server implementation (explicitly out of scope per user preference to not solve env/network/host configs) — implement the client protocol only, leave server as a documented external dependency."
+        },
+        {
+          "id": "test2",
+          "desc": "Unit test the message encode/decode functions in shared/net.js round-trip all four message types without data loss.",
+          "type": "unit"
+        }
+      ]
+    },
+    {
+      "id": "gap6",
+      "title": "Automated test harness",
+      "tasks": [
+        {
+          "id": "task1",
+          "desc": "Extract the pure-logic functions currently inline in design/index.html and world/index.html (paintVoxelAt, collides, approxRadius, gfValidateAsset callers) into shared/*.js modules so they're importable and testable outside the DOM."
+        },
+        {
+          "id": "task2",
+          "desc": "Add a lightweight Node test runner (no framework dependency required — plain `node --test` using the built-in `node:test` module) covering shared/assetFormat.js and shared/voxelMesh.js pure functions."
+        }
+      ],
+      "tests": [
+        {
+          "id": "test1",
+          "desc": "`node --test shared/*.test.js` exits 0 with at least one passing assertion per exported pure function.",
+          "type": "unit",
+          "how": "Run `node --test` from the gameforge/ directory once test files exist."
+        },
+        {
+          "id": "test2",
+          "desc": "gfValidateAsset returns a non-empty error array for an asset missing `kind`, and an empty array for a minimal valid voxel asset.",
+          "type": "unit"
+        }
+      ]
+    }
+  ]
+}
