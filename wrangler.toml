@@ -1,0 +1,18 @@
+name = "nextaura-app14-us"
+main = "worker.js"
+compatibility_date = "2026-06-17"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"
+not_found_handling = "none"
+run_worker_first = true
+
+[[durable_objects.bindings]]
+name = "FORGE"
+class_name = "ForgeRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ForgeRoom"]

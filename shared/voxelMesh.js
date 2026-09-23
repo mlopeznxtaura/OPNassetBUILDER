@@ -3,7 +3,8 @@
  * Requires THREE to be loaded globally before this script.
  */
 
-function gfBuildVoxelMesh(asset) {
+function gfBuildVoxelMesh(asset, opts) {
+  const recenter = !opts || opts.recenter !== false;
   const { cellSize, voxels } = asset.voxel;
   const group = new THREE.Group();
   group.name = asset.name;
@@ -30,6 +31,7 @@ function gfBuildVoxelMesh(asset) {
     group.add(mesh);
   }
 
+  if (!recenter || !group.children.length) return group;
   // Recenter group so origin sits at the model's horizontal center, base on floor.
   const box = new THREE.Box3().setFromObject(group);
   const center = box.getCenter(new THREE.Vector3());

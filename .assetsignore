@@ -1,0 +1,15 @@
+.git
+.git/**
+.wrangler
+.wrangler/**
+.cursor
+.cursor/**
+wrangler.toml
+worker.js
+forgeRoom.js
+package.json
+mcp
+mcp/**
+shared/mcpTools.js
+shared/forgeCore.test.js
+.assetsignore
