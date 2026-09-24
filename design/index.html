@@ -37,6 +37,10 @@
   .pixel-cell { width:16px; height:16px; }
   .hint { font-size:11px; color:#6b7280; line-height:1.5; margin-top:6px; }
   .badge { background:#182430; color:var(--accent); font-size:10px; padding:2px 6px; border-radius:10px; }
+  .stats-panel { font-size:12px; line-height:1.55; background:#0f1115; border:1px solid var(--line); border-radius:8px; padding:10px; font-variant-numeric: tabular-nums; }
+  .stats-panel strong { color:var(--accent); font-weight:600; }
+  .stats-panel .muted { color:#6b7280; font-size:11px; margin-top:6px; }
+  #toolbar .stats-inline { font-size:11px; color:#9aa1ad; font-variant-numeric: tabular-nums; margin-left:auto; }
   #layerCtl { display:flex; align-items:center; gap:8px; }
   a.navlink { color:var(--accent); text-decoration:none; font-size:12px; }
 </style>
@@ -96,9 +100,14 @@
     <div id="spriteGrid"></div>
   </div>
 
-  <div class="row" style="margin-top:16px">
+  <div class="row" style="margin-top:16px; flex-wrap:wrap">
+    <button class="primary" id="btnNewAsset">Create asset</button>
     <button class="primary" id="btnSave">Save to library</button>
   </div>
+  <div id="createHint" class="hint">Create applies the name and grid above, then shows the 3D bounds. Agents should call <code>paint_voxels</code> with cells to fill the mesh.</div>
+
+  <h2>3D render stats</h2>
+  <div id="meshStats" class="stats-panel">—</div>
 
   <h2>Library <span id="libCount" class="badge">0</span></h2>
   <div id="assetList"></div>
@@ -115,8 +124,9 @@
 
 <div id="main">
   <div id="toolbar">
-    <span style="font-size:12px;color:#9aa1ad">Live preview - drag to orbit, click to paint, scroll to zoom</span>
+    <span style="font-size:12px;color:#9aa1ad">Live preview — drag to orbit, click to paint, scroll to zoom</span>
     <span id="syncStatus" class="badge">...</span>
+    <span id="toolbarStats" class="stats-inline"></span>
   </div>
   <div id="bootError"></div>
   <div id="viewport"></div>

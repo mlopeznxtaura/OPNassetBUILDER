@@ -2,12 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   collidesAt,
+  computeVoxelMeshStats,
   createVoxelAsset,
   gfValidateAsset,
   memoryStore,
   paintVoxelCells
 } from './forgeCore.js';
 import { callTool, handleMcpMessage } from './mcpTools.js';
+
+test('mesh stats count exposed faces on a single voxel', () => {
+  const asset = createVoxelAsset({ name: 'cube', size: [2, 2, 2] });
+  paintVoxelCells(asset, [{ x: 0, y: 0, z: 0, c: '#fff' }]);
+  const mesh = computeVoxelMeshStats(asset);
+  assert.equal(mesh.voxelCount, 1);
+  assert.equal(mesh.faces, 6);
+  assert.equal(mesh.triangles, 12);
+});
 
 test('paint and erase stay inside the grid', () => {
   const asset = createVoxelAsset({ name: 'crate', size: [2, 2, 2] });

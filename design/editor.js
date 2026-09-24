@@ -1,5 +1,11 @@
 import { createLiveClient } from '../shared/liveClient.js';
-import { createSpriteAsset, createVoxelAsset, gfNewId, gfValidateAsset } from '../shared/forgeCore.js';
+import {
+  computeVoxelMeshStats,
+  createSpriteAsset,
+  createVoxelAsset,
+  gfNewId,
+  gfValidateAsset
+} from '../shared/forgeCore.js';
 
 const STORAGE_KEY = 'gameforge_assets_v1';
 const live = createLiveClient();
@@ -61,6 +67,43 @@ function setStatus(text) {
   document.getElementById('syncStatus').textContent = text;
 }
 function markDirty() { dirty = true; }
+
+function formatMeshStats(asset) {
+  if (!asset || asset.kind !== 'voxel') {
+    if (asset && asset.kind === 'sprite') {
+      const opaque = asset.sprite.pixels.filter(Boolean).length;
+      return { lines: [`<strong>${opaque}</strong> painted pixels`, `${asset.sprite.w}×${asset.sprite.h} sprite`], toolbar: `${opaque} px · ${asset.sprite.w}×${asset.sprite.h}` };
+    }
+    return { lines: ['No mesh yet'], toolbar: '' };
+  }
+  const mesh = computeVoxelMeshStats(asset);
+  const [gx, gy, gz] = mesh.grid || asset.voxel.size;
+  if (!mesh.voxelCount) {
+    return {
+      lines: [
+        `<strong>0</strong> solid voxels`,
+        `Grid <strong>${gx}×${gy}×${gz}</strong> (wireframe shown)`,
+        '<span class="muted">No triangles until voxels are painted or an agent sends <code>paint_voxels</code> cells.</span>'
+      ],
+      toolbar: `0 voxels · grid ${gx}×${gy}×${gz}`
+    };
+  }
+  return {
+    lines: [
+      `<strong>${mesh.voxelCount}</strong> solid voxels`,
+      `<strong>${mesh.triangles.toLocaleString()}</strong> triangles · <strong>${mesh.vertices.toLocaleString()}</strong> quad corners`,
+      `<strong>${mesh.faces.toLocaleString()}</strong> exposed faces · grid ${gx}×${gy}×${gz}`
+    ],
+    toolbar: `${mesh.voxelCount} voxels · ${mesh.triangles.toLocaleString()} tris`
+  };
+}
+
+function updateMeshStatsUI() {
+  const { lines, toolbar } = formatMeshStats(current);
+  const panel = document.getElementById('meshStats');
+  panel.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+  document.getElementById('toolbarStats').textContent = toolbar;
+}
 
 const viewport = document.getElementById('viewport');
 const scene = new THREE.Scene();
@@ -136,13 +179,26 @@ function clearGroup(group) {
   while (group.children.length) group.remove(group.children[0]);
 }
 
+function addBoundsWireframe(sx, sy, sz, cell) {
+  const boxGeo = new THREE.BoxGeometry(sx * cell, sy * cell, sz * cell);
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(boxGeo),
+    new THREE.LineBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: 0.55 })
+  );
+  edges.position.set(sx * cell / 2, sy * cell / 2, sz * cell / 2);
+  voxelHelperGroup.add(edges);
+  boxGeo.dispose();
+}
+
 function rebuildVoxelPreview() {
   clearGroup(voxelHelperGroup);
-  const [sx, , sz] = current.voxel.size;
+  const [sx, sy, sz] = current.voxel.size;
   const cell = current.voxel.cellSize || 1;
   const group = gfBuildVoxelMesh(current, { recenter: false });
   group.position.set(-sx * cell / 2, 0, -sz * cell / 2);
   setPreview(group);
+  if (!current.voxel.voxels.length) addBoundsWireframe(sx, sy, sz, cell);
+  updateMeshStatsUI();
 
   const plane = new THREE.Mesh(
     new THREE.PlaneGeometry(sx * cell, sz * cell),
@@ -160,6 +216,7 @@ function rebuildVoxelPreview() {
 
 function rebuildSpritePreview() {
   setPreview(gfBuildSpriteMesh(current));
+  updateMeshStatsUI();
 }
 
 function paintVoxelAt(gridX, gridZ, erase) {
@@ -245,6 +302,22 @@ function loadAsset(asset) {
   dirty = false;
   refreshModeUI();
   refreshLibraryList();
+  updateMeshStatsUI();
+}
+
+function readFormNewAsset() {
+  const name = document.getElementById('assetName').value.trim() || 'unnamed';
+  const kind = document.getElementById('assetKind').value;
+  const collidable = document.getElementById('assetCollidable').checked;
+  if (kind === 'voxel') {
+    const x = +document.getElementById('vx').value;
+    const y = +document.getElementById('vy').value;
+    const z = +document.getElementById('vz').value;
+    return createVoxelAsset({ name, size: [x, y, z], collidable });
+  }
+  const w = +document.getElementById('sw').value;
+  const h = +document.getElementById('sh').value;
+  return createSpriteAsset({ name, w, h, collidable });
 }
 
 function refreshModeUI() {
@@ -273,8 +346,22 @@ document.getElementById('assetKind').onchange = (e) => {
   markDirty();
   refreshModeUI();
 };
-document.getElementById('assetName').oninput = markDirty;
-document.getElementById('assetCollidable').onchange = markDirty;
+document.getElementById('assetName').oninput = (e) => {
+  current.name = e.target.value.trim();
+};
+document.getElementById('assetCollidable').onchange = (e) => {
+  current.collidable = e.target.checked;
+};
+
+document.getElementById('btnNewAsset').onclick = () => {
+  current = readFormNewAsset();
+  selectedLibId = null;
+  dirty = true;
+  layerY = 0;
+  document.getElementById('layerSlider').value = 0;
+  document.getElementById('layerVal').textContent = '0';
+  refreshModeUI();
+};
 
 document.getElementById('btnResizeVoxel').onclick = () => {
   const x = +document.getElementById('vx').value;
@@ -402,18 +489,35 @@ function applyRemoteLibrary(library) {
   const prevJson = new Map(previous.assets.map(a => [a.id, JSON.stringify(a)]));
   gfSaveLibrary(library);
   const changed = library.assets.filter(a => prevJson.get(a.id) !== JSON.stringify(a));
+  const added = library.assets.filter(a => !prevJson.has(a.id));
   refreshLibraryList();
-  if (dirty) return;
-  if (selectedLibId) {
-    const updated = library.assets.find(a => a.id === selectedLibId);
-    if (updated && prevJson.get(updated.id) !== JSON.stringify(updated)) loadAsset(updated);
-    return;
-  }
-  const named = document.getElementById('assetName').value.trim();
-  const hasPaint = current.kind === 'voxel'
+
+  const nameInField = document.getElementById('assetName').value.trim();
+  const localPaint = current.kind === 'voxel'
     ? current.voxel.voxels.length > 0
     : current.sprite.pixels.some(Boolean);
-  if (!named && !hasPaint && changed.length) loadAsset(changed[changed.length - 1]);
+
+  if (selectedLibId) {
+    const updated = library.assets.find(a => a.id === selectedLibId);
+    if (updated && prevJson.get(updated.id) !== JSON.stringify(updated)) {
+      loadAsset(updated);
+      return;
+    }
+  }
+
+  const byName = nameInField && changed.find(a => a.name === nameInField);
+  if (byName && (!dirty || !localPaint)) {
+    loadAsset(byName);
+    return;
+  }
+
+  if (dirty && localPaint) return;
+
+  const candidates = [...added, ...changed].filter(a => {
+    if (a.kind === 'voxel') return a.voxel.voxels.length > 0;
+    return a.sprite.pixels.some(Boolean);
+  });
+  if (candidates.length) loadAsset(candidates[candidates.length - 1]);
 }
 
 async function poll() {
@@ -430,6 +534,7 @@ async function poll() {
 }
 
 async function boot() {
+  updateMeshStatsUI();
   refreshModeUI();
   refreshLibraryList();
   try {

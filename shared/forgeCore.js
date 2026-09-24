@@ -148,16 +148,44 @@ export function collidesAt(library, level, x, z, playerRadius = 0.5) {
   return { hit: hits.length > 0, hits };
 }
 
+export function computeVoxelMeshStats(asset) {
+  if (!asset || asset.kind !== 'voxel' || !asset.voxel) {
+    return { voxelCount: 0, faces: 0, triangles: 0, vertices: 0, grid: null };
+  }
+  const voxels = asset.voxel.voxels || [];
+  const grid = asset.voxel.size;
+  if (!voxels.length) {
+    return { voxelCount: 0, faces: 0, triangles: 0, vertices: 0, grid };
+  }
+  const set = new Set(voxels.map(v => v.x + ',' + v.y + ',' + v.z));
+  const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  let faces = 0;
+  for (const v of voxels) {
+    for (const [dx, dy, dz] of dirs) {
+      if (!set.has((v.x + dx) + ',' + (v.y + dy) + ',' + (v.z + dz))) faces++;
+    }
+  }
+  return {
+    voxelCount: voxels.length,
+    faces,
+    triangles: faces * 2,
+    vertices: faces * 4,
+    grid
+  };
+}
+
 export function summarizeAsset(asset) {
   if (!asset) return null;
   if (asset.kind === 'voxel') {
+    const mesh = computeVoxelMeshStats(asset);
     return {
       id: asset.id,
       name: asset.name,
       kind: asset.kind,
       collidable: !!asset.collidable,
       size: asset.voxel.size,
-      voxelCount: asset.voxel.voxels.length
+      voxelCount: mesh.voxelCount,
+      mesh
     };
   }
   return {
