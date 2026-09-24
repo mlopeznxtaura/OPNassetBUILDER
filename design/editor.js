@@ -76,6 +76,17 @@ function markDirty() { dirty = true; }
 let viewStats = null;
 let characterLoadError = '';
 
+function syncCharacterModelSelect() {
+  const sel = document.getElementById('characterModel');
+  if (!sel || current.kind !== 'character') return;
+  const model = (current.character && current.character.model) || 'female-hero';
+  if (model === 'custom' || (current.character && current.character.src && /\/api\/blobs\//.test(current.character.src))) {
+    sel.value = 'custom';
+  } else if (sel.querySelector('option[value="' + model + '"]')) {
+    sel.value = model;
+  }
+}
+
 function updateCharacterMeshInfo() {
   const el = document.getElementById('characterMeshInfo');
   if (!el) return;
@@ -401,6 +412,9 @@ function rebuildCharacterPreview() {
     if (typeof gfAlignObjectToGround === 'function') gfAlignObjectToGround(gltf.scene);
     group.add(gltf.scene);
     viewStats = inspectCharacter(gltf.scene);
+    if (current.character) {
+      current.character.stats = { ...viewStats };
+    }
     controls.target.set(0, 0.95, 0);
     camera.position.set(1.35, 1.25, 1.9);
     updateMeshStatsUI();
@@ -452,7 +466,7 @@ function refreshModeUI() {
   document.getElementById('spriteEditorWrap').style.display = isVoxel || isCharacter ? 'none' : '';
   document.getElementById('btnReseed').style.display = isCharacter ? 'none' : '';
   document.getElementById('seedStarter').parentElement.style.display = isCharacter ? 'none' : '';
-  if (isCharacter && current.character) document.getElementById('characterModel').value = current.character.model || 'female-hero';
+  if (isCharacter) syncCharacterModelSelect();
   if (isCharacter) {
     rebuildCharacterPreview();
   } else if (isVoxel) {
@@ -499,10 +513,15 @@ document.getElementById('btnNewAsset').onclick = () => {
 
 document.getElementById('characterModel').onchange = () => {
   if (current.kind !== 'character') return;
+  const pick = document.getElementById('characterModel').value;
+  if (pick === 'custom') {
+    syncCharacterModelSelect();
+    return;
+  }
   const next = createCharacterAsset({
     id: current.id,
     name: document.getElementById('assetName').value.trim() || current.name,
-    model: document.getElementById('characterModel').value,
+    model: pick,
     collidable: document.getElementById('assetCollidable').checked
   });
   next.createdAt = current.createdAt;
@@ -510,6 +529,72 @@ document.getElementById('characterModel').onchange = () => {
   viewStats = null;
   dirty = true;
   rebuildCharacterPreview();
+};
+
+function setSessionBadge(sessionId) {
+  const el = document.getElementById('sessionBadge');
+  if (!el || !sessionId) return;
+  el.style.display = '';
+  el.textContent = 'Studio ' + sessionId.slice(-10);
+  el.title = 'Session ' + sessionId + ' — library and blobs are isolated to this browser tab';
+}
+
+document.getElementById('btnImportGlb').onclick = () => document.getElementById('fileImportGlb').click();
+document.getElementById('fileImportGlb').onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (current.kind !== 'character') {
+    document.getElementById('assetKind').value = 'character';
+    current = createCharacterAsset({
+      name: document.getElementById('assetName').value.trim() || file.name.replace(/\.(glb|gltf)$/i, ''),
+      model: 'female-hero'
+    });
+    refreshModeUI();
+  }
+  const max = 25 * 1024 * 1024;
+  if (file.size > max) {
+    alert('File is too large (' + Math.round(file.size / 1024 / 1024) + ' MB). Limit is 25 MB.');
+    return;
+  }
+  const hint = document.getElementById('characterMeshInfo');
+  const prev = hint ? hint.textContent : '';
+  if (hint) hint.textContent = 'Uploading ' + file.name + '…';
+  try {
+    await live.ensureSession();
+    const bytes = await file.arrayBuffer();
+    const ct = /\.gltf$/i.test(file.name) ? 'model/gltf+json' : 'model/gltf-binary';
+    const { src, backend } = await live.uploadBlob(file.name, bytes, ct);
+    const name = document.getElementById('assetName').value.trim() || file.name.replace(/\.(glb|gltf)$/i, '');
+    const next = createCharacterAsset({
+      id: current.id,
+      name,
+      model: 'female-hero',
+      src,
+      collidable: document.getElementById('assetCollidable').checked
+    });
+    next.createdAt = current.createdAt;
+    current = next;
+    selectedLibId = null;
+    viewStats = null;
+    dirty = true;
+    setSessionBadge(live.sessionId());
+    syncCharacterModelSelect();
+    rebuildCharacterPreview();
+    if (hint) {
+      hint.textContent = 'Uploaded via ' + (backend || 'blob') + '. Save to library when ready.';
+    }
+    if (!remote) {
+      try {
+        await live.state();
+        remote = true;
+        setStatus('Live');
+      } catch (err) { /* local-only upload may still work if worker reachable */ }
+    }
+  } catch (err) {
+    if (hint) hint.textContent = prev;
+    alert('Import failed: ' + (err && err.message ? err.message : err));
+  }
 };
 
 document.getElementById('btnReseed').onclick = () => {
@@ -1178,6 +1263,8 @@ async function boot() {
   refreshModeUI();
   refreshLibraryList();
   try {
+    await live.ensureSession();
+    setSessionBadge(live.sessionId());
     const data = await live.state();
     remote = true;
     setStatus('Live');

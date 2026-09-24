@@ -88,8 +88,13 @@
     <select id="characterModel">
       <option value="female-hero">Female hero base (skinned)</option>
       <option value="male-hero">Male hero base (skinned)</option>
+      <option value="custom">Uploaded mesh (session blob)</option>
     </select>
-    <div class="hint">Smooth body with a skeleton. Voxel paint does not apply. Orbit to inspect the face, hair, and limbs.</div>
+    <div class="row" style="margin-top:8px; flex-wrap:wrap">
+      <button type="button" id="btnImportGlb">Import GLB / GLTF</button>
+      <input type="file" id="fileImportGlb" accept=".glb,.gltf,model/gltf-binary" style="display:none">
+    </div>
+    <div class="hint">Stock heroes are low-poly mannequins (~1.3k tris). For photogrammetry or kit meshes, import a GLB (≤25 MB) — uploads to your session blob store, then Save.</div>
     <div id="characterMeshInfo" class="hint" style="margin-top:6px">Mesh: —</div>
   </div>
   <div id="voxelSizeCtl">
@@ -161,6 +166,7 @@
   <div id="toolbar">
     <span style="font-size:12px;color:#9aa1ad">Live preview — drag to orbit, click to paint, scroll to zoom</span>
     <span id="syncStatus" class="badge">...</span>
+    <span id="sessionBadge" class="badge" title="Studio session id" style="display:none"></span>
     <span id="toolbarStats" class="stats-inline"></span>
   </div>
   <div id="bootError"></div>
