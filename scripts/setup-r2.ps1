@@ -29,7 +29,7 @@ Write-Host "=== Step 3: Enable R2 in the browser (one-time, ~30 seconds) ===" -F
 Write-Host "  A tab will open. On that page:"
 Write-Host "    1) Pick account: Mlopez@nextaura.fit"
 Write-Host "    2) Click 'Purchase R2' or 'Enable R2' or 'Get started' (free tier is OK)"
-Write-Host "    3) Accept terms / add payment method if Cloudflare asks (often required even for free)"
+Write-Host "    3) If Cloudflare asks for a CARD, you can CANCEL — use docs/STORAGE_SETUP.md path A (git assets) or B (Supabase) instead."
 Write-Host "  When the R2 overview shows (even empty), come back here and press ENTER."
 Start-Process "https://dash.cloudflare.com/683f127c03af82423467b6fad679252c/r2/overview"
 Read-Host "Press ENTER after R2 is enabled in the dashboard"

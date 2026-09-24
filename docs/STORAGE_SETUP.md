@@ -1,107 +1,115 @@
-# Storage setup (free tier): sessions, R2 blobs, optional MongoDB
+# Storage setup — free tier, no Cloudflare billing required
 
-app14 keeps **small JSON** per browser session (library + level) and **large GLB files** in object storage. You do not need MongoDB for automated kit uploads; R2 + per-session Durable Objects are enough on Cloudflare’s free tier.
+app14 splits **small JSON** (library per session, ~800 KB cap) from **large GLB files** (object storage). You do **not** have to enable Cloudflare R2 or add a card to Cloudflare for blobs.
 
-## 1. Cloudflare (already used for app14)
+## Choose a blob backend
 
-### Wrangler OAuth (one-time per machine)
+| Option | Billing on file? | Typical free cap | Best for |
+|--------|------------------|------------------|----------|
+| **A. Git + `/assets/` deploy** | No | Repo size | Kit GLBs built by scripts/agents, committed, `npm run deploy` |
+| **B. Supabase Storage** | Often **no card** for free project | **1 GB** storage | Automated user/agent upload without R2 |
+| **C. MongoDB Atlas M0** | **No card** on M0 signup (OAuth) | **512 MB** whole cluster | Same; store blobs via Worker + GridFS or capped documents |
+| **D. Cloudflare R2** | **Often requires card on file** to enable product | Free tier when enabled | Same account as Workers; optional only |
 
-**Error `Authentication error [code: 10000]`** almost always means `CLOUDFLARE_API_TOKEN` is set in the environment and is wrong or missing **R2 / Account** permissions. Wrangler prefers that token over OAuth.
+**Recommendation if you refuse Cloudflare billing:** use **A** for Belize/Trinidad kits (commit GLB → deploy), or **B** when we wire Supabase upload (next backend). Sessions + library already work on Workers **without** R2.
 
-PowerShell (every new terminal until you remove the system env var):
+### App-level locks (we enforce regardless of provider)
+
+These limits are in code (`workerBlobs.js`, `forgeRoom.js`) so one session cannot blow the free tier:
+
+| Limit | Value |
+|-------|--------|
+| Library JSON per session | **800 KB** (reject save if larger) |
+| Single GLB upload | **25 MB** |
+| Planned: total blobs per session | **100 MB** (TODO: counter in DO) |
+| Scan thumb in library | Reference JPEG only, not full frame arrays |
+
+Provider caps (512 MB Mongo, 1 GB Supabase) are **hard ceilings** — the app limits sit below them.
+
+---
+
+## 1. Cloudflare Workers (hosting — already on app14)
+
+### Wrangler OAuth
+
+Remove a broken user env token (we removed `CLOUDFLARE_API_TOKEN` from your Windows user profile once; new terminals should be clean):
 
 ```powershell
 cd f:\NextAuraMonth7getrichordietryin\gameforgev1
 Remove-Item Env:CLOUDFLARE_API_TOKEN -ErrorAction SilentlyContinue
-Remove-Item Env:CLOUDFLARE_API_KEY -ErrorAction SilentlyContinue
-npx wrangler whoami
-```
-
-If `whoami` still fails, open **Windows Settings → System → Environment variables** and delete `CLOUDFLARE_API_TOKEN` from User or System, then open a **new** terminal.
-
-```powershell
 npx wrangler login
 npx wrangler whoami
 ```
 
-Optional API token instead of OAuth: create at Cloudflare Dashboard → **My Profile → API Tokens** with **Account → R2 → Edit** and **Account → Workers Scripts → Edit** (or use the “Edit Cloudflare Workers” template and add R2). Then `set CLOUDFLARE_API_TOKEN=...` only in that session if you prefer tokens over OAuth.
+`account_id` is set in `wrangler.toml`.
 
-Approve the browser prompt. Verify:
+### R2 (optional — skip if no card)
+
+Only if you accept Cloudflare’s R2 enable flow (may ask for payment method on file; free tier usage can still be $0):
+
+1. Dashboard → R2 → Enable.
+2. `npx wrangler r2 bucket create opnassetbuilder-blobs` (+ preview).
+3. Uncomment `[[r2_buckets]]` in `wrangler.toml`.
+4. `npm run deploy`.
+
+Without R2: `PUT /api/blobs/…` returns **503**; use path **A** or **B** below.
+
+Helper script (includes optional R2 steps): `scripts/setup-r2.ps1`.
+
+---
+
+## 2. Path A — No upload API (zero storage signup)
+
+1. Put `female-trinidadian.glb` in `assets/`.
+2. `npm run deploy`.
+3. `upsert_asset { kind:"character", src:"/assets/female-trinidadian.glb" }`.
+
+Fully automated for **your** pipeline if the recipe agent commits + CI deploys. Not per-visitor upload.
+
+---
+
+## 3. Path B — Supabase Storage (free tier, no R2)
+
+1. [supabase.com](https://supabase.com) → New project (GitHub login).
+2. Storage → New bucket `opn-meshes` → **private** or public read for GLBs.
+3. Settings → API: `SUPABASE_URL`, `service_role` key (Worker only, never in browser).
 
 ```bash
-npx wrangler whoami
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
 
-### R2 bucket (GLB storage)
+**Status:** Worker proxy `PUT /api/blobs` → Supabase is planned; today use path A or enable R2.
 
-1. In the [Cloudflare dashboard](https://dash.cloudflare.com/) → **R2** → **Overview** → **Purchase/Enable R2** (free tier includes storage; one-time enable per account).
-2. Then:
+---
 
-```bash
-npx wrangler r2 bucket create opnassetbuilder-blobs
-npx wrangler r2 bucket create opnassetbuilder-blobs-preview
-Uncomment the `[[r2_buckets]]` block in `wrangler.toml`, then:
+## 4. Path C — MongoDB Atlas M0 (free, OAuth signup)
 
-```bash
-npm run deploy
-```
-
-Until R2 is enabled and `wrangler.toml` binding is active, `PUT /api/blobs/…` returns **503**; **sessions** and per-session library API still work.
-
-After deploy:
-
-- `POST /api/sessions` → new `sessionId` + `gf_session` cookie (7 days).
-- `PUT /api/blobs/{sessionId}/hero.glb` with header `X-GameForge-Session: {sessionId}` → up to **25 MB** per file.
-- Library row: `character.src: "/api/blobs/s_…/hero.glb"` (validated by the API).
-
-Design/World call `ensureForgeSession()` before Live sync so each visitor gets a **fresh studio** unless they reuse the same browser session.
-
-## 2. Limits (what “web storage” means here)
-
-| Layer | Limit | Holds |
-|--------|--------|--------|
-| Durable Object per `sessionId` | **~800 KB** total library JSON | Assets metadata, voxels, scan thumb |
-| R2 | Free tier storage + egress rules | **All GLB/GLTF binaries** |
-| Browser `sessionStorage` | ~5 MB | Session id only |
-| Browser `localStorage` | ~5 MB/site | Offline fallback copy of library |
-
-Do **not** embed GLBs in library JSON.
-
-## 3. Optional MongoDB Atlas M0 (free)
-
-Use Mongo only if you want **long-lived** libraries, analytics, or admin search—not required for per-session automation.
-
-1. Sign up: [https://www.mongodb.com/cloud/atlas/register](https://www.mongodb.com/cloud/atlas/register) (Google/GitHub OAuth).
-2. Create a **M0 free** cluster (any region).
-3. **Database Access** → Add user (password) → role `readWrite` on your DB.
-4. **Network Access** → Allow access from anywhere (`0.0.0.0/0`) for Workers, or use Atlas **Private Endpoint** later.
-5. **Data API** (if enabled on your project): create API key, note URL + key.
-
-Store secrets (not in git):
+1. [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) → M0 cluster.
+2. Network: allow `0.0.0.0/0` for Cloudflare Workers egress (or Data API).
+3. Store **metadata** or small blobs; **512 MB cluster max** — enforce **25 MB/file** in the Worker.
 
 ```bash
 npx wrangler secret put MONGODB_DATA_API_URL
 npx wrangler secret put MONGODB_DATA_API_KEY
 ```
 
-A future Worker hook can mirror `PUT /api/library` snapshots into Mongo; the live path remains DO + R2.
+**Status:** mirror library snapshots optional; blob path same as Supabase (planned).
 
-## 4. MCP / agents
+---
 
-Stdio proxy: set session so tools hit the same studio as the browser:
+## 5. Sessions (works today without any blob backend)
+
+- `POST /api/sessions` → `sessionId` + cookie.
+- `X-GameForge-Session` on `/api/*` and `/mcp`.
+- One Durable Object per session (fresh studio).
+
+## 6. MCP
 
 ```bash
 set GAMEFORGE_ORIGIN=https://app14.nextaura.us
-set GAMEFORGE_SESSION=s_xxxxxxxx   # from Design after POST /api/sessions, or browser devtools → sessionStorage gf_session_id
+set GAMEFORGE_SESSION=s_xxxxxxxx
 node mcp/stdio.js
 ```
 
-Upload a kit GLB:
-
-1. `POST /api/sessions` (or reuse session).
-2. `PUT /api/blobs/{sessionId}/female-trinidadian.glb` with raw GLB bytes.
-3. `upsert_asset { kind:"character", name:"…", src:"/api/blobs/…/female-trinidadian.glb" }`.
-
-## 5. Load balancing
-
-Workers are stateless at the edge. Each request routes to `ForgeRoom` via `idFromName(sessionId)`—sessions shard naturally. R2 keys are `sessionId/filename`. No custom load balancer required.
+See [PLATFORM_PLAN.md](./PLATFORM_PLAN.md).
