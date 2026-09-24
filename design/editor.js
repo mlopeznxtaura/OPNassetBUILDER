@@ -669,6 +669,22 @@ document.getElementById('btnCamera').onclick = async () => {
   }
 };
 
+document.getElementById('btnScan360').onclick = () => {
+  if (!bodyReady) return;
+  const hint = document.getElementById('scanHint');
+  let left = 12;
+  hint.textContent = 'Turn slowly through one full circle. Stay inside the green guide. ' + left + 's';
+  const timer = setInterval(() => {
+    left -= 1;
+    if (!scanStream || left <= 0) {
+      clearInterval(timer);
+      if (scanStream) hint.textContent = bodyReady ? 'Circle done. The guide held your whole body. Mesh build from these frames is the next step.' : 'Circle ended outside the guide. Step back and try again.';
+      return;
+    }
+    hint.textContent = 'Turn slowly. Stay green. ' + left + 's';
+  }, 1000);
+};
+
 document.getElementById('btnCapture').onclick = () => {
   if (!scanVideo.videoWidth) return;
   const canvas = document.createElement('canvas');
