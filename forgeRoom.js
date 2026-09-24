@@ -11,7 +11,8 @@ import {
   testState,
   upsertAsset
 } from './shared/forgeCore.js';
-import { TOOLS, handleMcpMessage } from './shared/mcpTools.js';
+import { buildAgentManifest, buildAgentTxt } from './shared/agentManifest.js';
+import { handleMcpMessage } from './shared/mcpTools.js';
 
 const MAX_BYTES = 800000;
 
@@ -63,56 +64,13 @@ export class ForgeRoom {
   }
 
   agentDoc(url) {
-    return {
-      schema_version: 1,
-      app_id: 'app14',
-      name: 'GameForge',
-      title: 'GameForge',
-      host: url.host,
-      purpose: 'Design voxel and sprite assets, place them in a world, and test collision.',
-      how_built: 'Cloudflare Worker + Durable Object. Pages are a live view of /api/state.',
-      discovery: {
-        agent_json: '/agent.json',
-        agent_txt: '/agent.txt',
-        well_known: '/.well-known/agent.json',
-        mcp: '/mcp'
-      },
-      api_endpoints: [
-        { method: 'GET', path: '/api/health' },
-        { method: 'GET', path: '/api/state' },
-        { method: 'GET', path: '/api/library' },
-        { method: 'PUT', path: '/api/library' },
-        { method: 'POST', path: '/api/assets' },
-        { method: 'DELETE', path: '/api/assets/:id' },
-        { method: 'POST', path: '/api/assets/:id/voxels' },
-        { method: 'POST', path: '/api/assets/:id/sprite' },
-        { method: 'GET', path: '/api/level' },
-        { method: 'PUT', path: '/api/level' },
-        { method: 'POST', path: '/api/level/placements' },
-        { method: 'POST', path: '/api/test' }
-      ],
-      mcp_tools: TOOLS.map(tool => tool.name),
-      asset_schema: {
-        voxel: '{ id, name, kind:"voxel", collidable, voxel:{ size:[x,y,z], cellSize, voxels:[{x,y,z,c}] } }',
-        sprite: '{ id, name, kind:"sprite", collidable, sprite:{ w, h, pixels:string[] } }'
-      }
-    };
+    return buildAgentManifest(url);
   }
 
   async route(request, url) {
     const path = url.pathname;
     if (path === '/agent.json' || path === '/.well-known/agent.json') return json(this.agentDoc(url));
-    if (path === '/agent.txt') {
-      return text([
-        'GameForge (app14)',
-        'Host: ' + url.host,
-        'Agent: /agent.json',
-        'MCP: POST /mcp',
-        'State: GET /api/state',
-        'Paint: POST /api/assets/:id/voxels { cells:[{x,y,z,c}] }',
-        'Test: POST /api/test { probes:[{x,z}] }'
-      ].join('\n') + '\n');
-    }
+    if (path === '/agent.txt') return text(buildAgentTxt(url));
     if (path === '/mcp') {
       if (request.method !== 'POST') return json({ ok: false, error: 'POST JSON-RPC to /mcp' }, 405);
       const msg = await request.json();

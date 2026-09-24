@@ -20,12 +20,12 @@ import {
 export const TOOLS = [
   {
     name: 'list_assets',
-    description: 'List GameForge assets (id, name, kind, counts).',
+    description: 'List OPNassetBUILDER library assets with id, name, kind, collidable, and mesh stats (voxelCount or character mesh vertices/triangles/bones).',
     inputSchema: { type: 'object', properties: {} }
   },
   {
     name: 'get_asset',
-    description: 'Get one asset by id or name, including voxel cells or sprite pixels.',
+    description: 'Get one full asset by id or name: voxel cells, sprite pixels, or character {model,src,stats}.',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'string' }, name: { type: 'string' } }
@@ -33,7 +33,7 @@ export const TOOLS = [
   },
   {
     name: 'upsert_asset',
-    description: 'Create or replace an asset. Pass a full asset, or name/kind/size/cells for a new voxel. Empty voxels get a name-based starter mesh unless seedStarter is false.',
+    description: 'Create or replace an asset. kind: voxel|sprite|character. Voxel: name,size,cells,seedStarter (auto humanoid/tree/crate if empty). Character: model female-hero|male-hero. Or pass full asset object.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -303,7 +303,7 @@ export async function handleMcpMessage(msg, store) {
       result: {
         protocolVersion: (msg.params && msg.params.protocolVersion) || '2024-11-05',
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'gameforge', version: '1.0.0' }
+        serverInfo: { name: 'opnassetbuilder', version: '2.0.0', title: 'OPNassetBUILDER' }
       }
     };
   }

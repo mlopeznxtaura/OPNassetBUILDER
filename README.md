@@ -56,9 +56,19 @@ gameforge/
   agents.json              gap registry: unimplemented tasks + tests for offline continuation
 ```
 
+## Agents & MCP
+
+- **Discovery**: `GET /agent.json`, `GET /agent.txt`, `GET /.well-known/agent.json`
+- **Docs page**: `/agents/index.html`
+- **MCP**: `POST /mcp` (JSON-RPC: `tools/list`, `tools/call`)
+- **State**: `GET /api/state` returns `{ revision, library, level }`
+- **Stdio proxy**: `node mcp/stdio.js` with `GAMEFORGE_ORIGIN=https://your-host`
+
+Tools: `list_assets`, `get_asset`, `upsert_asset`, `paint_voxels`, `paint_sprite`, `delete_asset`, `get_level`, `place`, `remove_placement`, `clear_level`, `test_level`.
+
 ## Data formats
 
-- **Asset**: `{ id, name, kind: 'voxel'|'sprite', collidable, voxel?, sprite?, createdAt }`
+- **Asset**: `{ id, name, kind: 'voxel'|'sprite'|'character', collidable, voxel?, sprite?, character?, scan?, createdAt }`
 - **Library**: `{ version, assets: Asset[] }` — persisted at `localStorage['gameforge_assets_v1']`
 - **Level**: `{ version, ground: {size}, placements: [{assetId, x, y, z, ry, scale}] }`
 

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OPNassetBUILDER — Agents &amp; API</title>
+<style>
+  :root { --bg:#111318; --panel:#1a1d24; --line:#2a2e38; --text:#e8e9ec; --accent:#5cc8ff; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.55; padding:24px; }
+  main { max-width:820px; margin:0 auto; }
+  h1 { color:var(--accent); font-size:26px; }
+  h2 { font-size:15px; text-transform:uppercase; letter-spacing:.05em; color:#9aa1ad; margin-top:28px; }
+  a { color:var(--accent); }
+  code, pre { background:#0f1115; border:1px solid var(--line); border-radius:8px; }
+  code { padding:2px 6px; font-size:13px; }
+  pre { padding:12px; overflow:auto; font-size:12px; }
+  ul { padding-left:20px; }
+  .badge { display:inline-block; background:#182430; color:var(--accent); font-size:11px; padding:2px 8px; border-radius:10px; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="../">← OPNassetBUILDER</a></p>
+  <h1>Agents &amp; API</h1>
+  <p>Machine-readable discovery for AI clients driving the same library and world as the browser UI.</p>
+  <p>
+    <span class="badge">app14</span>
+    <a href="/agent.json">agent.json</a> ·
+    <a href="/agent.txt">agent.txt</a> ·
+    <a href="/.well-known/agent.json">.well-known/agent.json</a> ·
+    <a href="/api/health">health</a>
+  </p>
+
+  <h2>What this is</h2>
+  <p>OPNassetBUILDER (formerly GameForge) is a two-stage asset pipeline: <strong>Stage 1</strong> design with live 3D preview, <strong>Stage 2</strong> world placement. Shared state lives in a Cloudflare Durable Object; browsers show <em>Live</em> when synced.</p>
+
+  <h2>MCP</h2>
+  <p>POST JSON-RPC 2.0 to <code>/mcp</code> on this host. Methods: <code>initialize</code>, <code>tools/list</code>, <code>tools/call</code>.</p>
+  <pre>curl -sS https://YOUR_HOST/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
+  <p>Local stdio proxy: <code>mcp/stdio.js</code> with <code>GAMEFORGE_ORIGIN=https://YOUR_HOST</code>.</p>
+
+  <h2>Tools</h2>
+  <ul id="toolList">Loading…</ul>
+
+  <h2>Asset kinds</h2>
+  <ul>
+    <li><strong>voxel</strong> — grid of colored cubes; <code>paint_voxels</code> or <code>upsert_asset</code> with <code>cells</code>. Optional <code>seedStarter</code> for name-based starter mesh.</li>
+    <li><strong>sprite</strong> — 2D pixel grid; <code>paint_sprite</code>.</li>
+    <li><strong>character</strong> — skinned glTF base (<code>female-hero</code>, <code>male-hero</code>); <code>upsert_asset { kind:"character", model:"male-hero" }</code>.</li>
+  </ul>
+
+  <h2>REST</h2>
+  <ul>
+    <li><code>GET /api/state</code> — library + level + revision</li>
+    <li><code>POST /api/assets</code> — upsert asset JSON body</li>
+    <li><code>POST /api/level/placements</code> — add placement or <code>{op:"remove",id}</code></li>
+    <li><code>POST /api/test</code> — validation + collision probes</li>
+  </ul>
+
+  <h2>Example flow</h2>
+  <pre id="example">Loading…</pre>
+
+  <h2>Full manifest</h2>
+  <pre id="manifest">Loading…</pre>
+</main>
+<script>
+fetch('/agent.json').then(r => r.json()).then(doc => {
+  const ul = document.getElementById('toolList');
+  ul.textContent = '';
+  (doc.mcp && doc.mcp.tools || []).forEach(t => {
+    const li = document.createElement('li');
+    li.innerHTML = '<code>' + t.name + '</code> — ' + t.description;
+    ul.appendChild(li);
+  });
+  const ex = (doc.agent_workflows && doc.agent_workflows[0]) || {};
+  document.getElementById('example').textContent = JSON.stringify(ex, null, 2);
+  document.getElementById('manifest').textContent = JSON.stringify(doc, null, 2);
+}).catch(() => {
+  document.getElementById('toolList').textContent = 'Could not load /agent.json';
+});
+</script>
+</body>
+</html>
