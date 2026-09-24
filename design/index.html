@@ -42,8 +42,11 @@
   .stats-panel .muted { color:#6b7280; font-size:11px; margin-top:6px; }
   #toolbar .stats-inline { font-size:11px; color:#9aa1ad; font-variant-numeric: tabular-nums; margin-left:auto; }
   #layerCtl { display:flex; align-items:center; gap:8px; }
-  #scanVideo, #scanPreview { width:100%; border-radius:8px; background:#000; margin-top:8px; }
-  #scanVideo { display:none; }
+  #scanStage { position:relative; margin-top:8px; display:none; border-radius:8px; overflow:hidden; background:#000; }
+  #scanStage.live { display:block; }
+  #scanVideo, #scanGuide { width:100%; display:block; }
+  #scanGuide { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  #scanPreview { width:100%; border-radius:8px; background:#000; margin-top:8px; }
   a.navlink { color:var(--accent); text-decoration:none; font-size:12px; }
 </style>
 </head>
@@ -76,9 +79,9 @@
   <div id="voxelSizeCtl">
     <label>Grid size (X × Y × Z)</label>
     <div class="row">
-      <input type="number" id="vx" value="6" min="1" max="24">
-      <input type="number" id="vy" value="6" min="1" max="24">
-      <input type="number" id="vz" value="6" min="1" max="24">
+      <input type="number" id="vx" value="6" min="1" max="48">
+      <input type="number" id="vy" value="6" min="1" max="48">
+      <input type="number" id="vz" value="6" min="1" max="48">
       <button id="btnResizeVoxel">Set</button>
     </div>
   </div>
@@ -126,10 +129,14 @@
   <div class="row">
     <button id="btnCamera">Start webcam</button>
     <button id="btnCapture" disabled>Capture</button>
+    <button id="btnScan360" disabled>Scan 360</button>
   </div>
-  <video id="scanVideo" autoplay playsinline muted></video>
+  <div id="scanStage">
+    <video id="scanVideo" autoplay playsinline muted></video>
+    <canvas id="scanGuide"></canvas>
+  </div>
   <img id="scanPreview" alt="Captured scan reference" style="display:none">
-  <div id="scanHint" class="hint">Turns on this browser's webcam. Capture stores a reference photo on the asset. It is not a finished 3D mesh yet.</div>
+  <div id="scanHint" class="hint">Start the webcam and step back until the body guide turns green. Head, hands, and both feet need to sit inside the outline.</div>
 
   <h2>3D render stats</h2>
   <div id="meshStats" class="stats-panel">—</div>
@@ -159,6 +166,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
 <script src="../shared/vendor/OrbitControls.js"></script>
 <script src="../shared/voxelMesh.js"></script>
 <script>

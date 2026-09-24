@@ -44,7 +44,7 @@ export function createVoxelAsset({ id, name, size = [6, 6, 6], collidable = true
     kind: 'voxel',
     collidable: collidable !== false,
     voxel: {
-      size: [clampInt(size[0], 1, 24), clampInt(size[1], 1, 24), clampInt(size[2], 1, 24)],
+      size: [clampInt(size[0], 1, 48), clampInt(size[1], 1, 48), clampInt(size[2], 1, 48)],
       cellSize: 1,
       voxels: []
     },

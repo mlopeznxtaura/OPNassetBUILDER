@@ -1,4 +1,5 @@
 import { createLiveClient } from '../shared/liveClient.js';
+import { bodyFit, guidePolylines, skeletonSegments } from '../shared/bodyGuide.js';
 import {
   computeVoxelMeshStats,
   createCharacterAsset,
@@ -376,6 +377,13 @@ function rebuildCharacterPreview() {
   });
 }
 
+function modelForName(name) {
+  const n = String(name || '').toLowerCase();
+  if (/\bmale\b|\bman\b|\bboy\b/.test(n) && !/female|woman|girl/.test(n)) return 'male-hero';
+  if (/female|woman|girl|heroine/.test(n)) return 'female-hero';
+  return document.getElementById('characterModel').value || 'female-hero';
+}
+
 function readFormNewAsset() {
   const name = document.getElementById('assetName').value.trim() || 'unnamed';
   const kind = document.getElementById('assetKind').value;
@@ -427,7 +435,11 @@ function refreshModeUI() {
 document.getElementById('assetKind').onchange = (e) => {
   const name = document.getElementById('assetName').value.trim();
   if (e.target.value === 'voxel') current = createVoxelAsset({ name, size: [6, 6, 6], collidable: true });
-  else if (e.target.value === 'character') current = createCharacterAsset({ name, model: document.getElementById('characterModel').value });
+  else if (e.target.value === 'character') {
+    const model = modelForName(name);
+    document.getElementById('characterModel').value = model;
+    current = createCharacterAsset({ name, model });
+  }
   else current = createSpriteAsset({ name });
   selectedLibId = null;
   markDirty();
@@ -531,8 +543,80 @@ async function pushAsset(asset) {
 }
 
 let scanStream = null;
+let poseLoop = 0;
+let poseBusy = false;
+let bodyReady = false;
 const scanVideo = document.getElementById('scanVideo');
 const scanPreview = document.getElementById('scanPreview');
+const scanStage = document.getElementById('scanStage');
+const scanGuide = document.getElementById('scanGuide');
+const guideCtx = scanGuide.getContext('2d');
+
+function drawPolyline(points, color, width) {
+  if (!points.length) return;
+  guideCtx.beginPath();
+  guideCtx.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) guideCtx.lineTo(points[i][0], points[i][1]);
+  guideCtx.strokeStyle = color;
+  guideCtx.lineWidth = width;
+  guideCtx.stroke();
+}
+
+function paintGuide(landmarks) {
+  const width = scanGuide.width;
+  const height = scanGuide.height;
+  guideCtx.clearRect(0, 0, width, height);
+  const fit = bodyFit(landmarks);
+  bodyReady = fit.ready;
+  const color = fit.ready ? '#3dde7a' : '#e0b15c';
+  guideCtx.lineCap = 'round';
+  guideCtx.lineJoin = 'round';
+  for (const line of guidePolylines(width, height)) drawPolyline(line, color, 3);
+  guideCtx.setLineDash([5, 6]);
+  drawPolyline([[width * 0.16, height * 0.03], [width * 0.84, height * 0.03], [width * 0.84, height * 0.97], [width * 0.16, height * 0.97], [width * 0.16, height * 0.03]], color, 2);
+  guideCtx.setLineDash([]);
+  for (const segment of skeletonSegments(landmarks, width, height)) drawPolyline(segment, fit.ready ? '#7dffb0' : '#ffd27a', 4);
+  document.getElementById('btnScan360').disabled = !fit.ready;
+  const hint = document.getElementById('scanHint');
+  if (fit.ready) hint.textContent = 'Whole body is in the green guide. Hold still, then turn slowly for Scan 360.';
+  else if (fit.found) hint.textContent = 'Step back until head, hands, and both feet sit inside the guide. Still outside: ' + fit.missing.slice(0, 3).join(', ') + '.';
+  else hint.textContent = 'Stand in view so the guide can see your whole body.';
+}
+
+let poseDetector = null;
+function ensurePose() {
+  if (poseDetector || !window.Pose) return poseDetector;
+  poseDetector = new window.Pose({
+    locateFile: (file) => 'https://cdn.jsdelivr.net/npm/@mediapipe/pose/' + file
+  });
+  poseDetector.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    enableSegmentation: false,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+  poseDetector.onResults((results) => paintGuide(results.poseLandmarks || null));
+  return poseDetector;
+}
+
+async function trackBody() {
+  if (!scanStream || poseBusy) return;
+  if (!scanVideo.videoWidth) return;
+  const pose = ensurePose();
+  if (!pose) {
+    paintGuide(null);
+    return;
+  }
+  if (scanGuide.width !== scanVideo.videoWidth) {
+    scanGuide.width = scanVideo.videoWidth;
+    scanGuide.height = scanVideo.videoHeight;
+  }
+  poseBusy = true;
+  try { await pose.send({ image: scanVideo }); }
+  catch (err) { paintGuide(null); }
+  poseBusy = false;
+}
 
 function showScanStill(dataUrl) {
   if (!dataUrl) {
@@ -551,9 +635,14 @@ document.getElementById('btnCamera').onclick = async () => {
     scanStream.getTracks().forEach(track => track.stop());
     scanStream = null;
     scanVideo.srcObject = null;
-    scanVideo.style.display = 'none';
+    cancelAnimationFrame(poseLoop);
+    poseLoop = 0;
+    scanStage.classList.remove('live');
+    guideCtx.clearRect(0, 0, scanGuide.width, scanGuide.height);
     button.textContent = 'Start webcam';
     document.getElementById('btnCapture').disabled = true;
+    document.getElementById('btnScan360').disabled = true;
+    bodyReady = false;
     return;
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -566,10 +655,15 @@ document.getElementById('btnCamera').onclick = async () => {
       video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     scanVideo.srcObject = scanStream;
-    scanVideo.style.display = 'block';
+    scanStage.classList.add('live');
     button.textContent = 'Stop webcam';
     document.getElementById('btnCapture').disabled = false;
-    hint.textContent = 'Webcam is live. Capture saves a reference photo on this asset.';
+    hint.textContent = 'Finding your body. Step back until the guide turns green.';
+    const tick = () => {
+      trackBody();
+      poseLoop = requestAnimationFrame(tick);
+    };
+    poseLoop = requestAnimationFrame(tick);
   } catch (err) {
     hint.textContent = 'Camera permission was blocked. Allow the camera for this site and try again. ' + (err && err.message ? err.message : '');
   }

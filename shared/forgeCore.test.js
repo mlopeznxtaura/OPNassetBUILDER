@@ -10,7 +10,19 @@ import {
   paintVoxelCells,
   seedVoxelStarter
 } from './forgeCore.js';
+import { bodyFit } from './bodyGuide.js';
 import { callTool, handleMcpMessage } from './mcpTools.js';
+
+test('body guide is ready only when the whole body is inside the frame', () => {
+  const point = (x, y) => ({ x, y, visibility: 0.9 });
+  const framed = Array.from({ length: 33 }, () => point(0.5, 0.5));
+  framed[0] = point(0.5, 0.08);
+  framed[27] = point(0.4, 0.92);
+  framed[28] = point(0.6, 0.92);
+  assert.equal(bodyFit(framed).ready, true);
+  framed[28] = point(0.98, 0.92);
+  assert.equal(bodyFit(framed).ready, false);
+});
 
 test('character asset is a skinned mesh with bone and triangle counts', () => {
   const asset = createCharacterAsset({ name: 'female hero' });
