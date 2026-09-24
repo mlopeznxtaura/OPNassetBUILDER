@@ -1,6 +1,6 @@
 # Storage setup — free tier, no Cloudflare billing required
 
-app14 splits **small JSON** (library per session, ~800 KB cap) from **large GLB files** (object storage). You do **not** have to enable Cloudflare R2 or add a card to Cloudflare for blobs.
+app14 splits **small JSON** (library per session, ~800 KB cap) from **large GLB files** (object storage). **Tier order** (Supabase → Vercel → Oracle → AWS → R2 last): [STORAGE_TIERS.md](./STORAGE_TIERS.md).
 
 ## Choose a blob backend
 

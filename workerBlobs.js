@@ -1,3 +1,5 @@
+import { storeBlob, loadBlob } from './workerBlobTiers.js';
+
 const GLB_MAX = 25 * 1024 * 1024;
 
 export function corsHeaders() {
@@ -45,7 +47,6 @@ function json(data, status = 200, extraHeaders = {}) {
 
 export async function handleBlobs(request, env, url) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
-  if (!env.BLOBS) return json({ ok: false, error: 'R2 bucket not configured (run wrangler r2 bucket create opnassetbuilder-blobs)' }, 503);
 
   const match = url.pathname.match(/^\/api\/blobs\/(s_[a-zA-Z0-9_-]+)\/([^/]+)$/);
   if (!match) return json({ ok: false, error: 'path must be /api/blobs/{sessionId}/{filename}.glb' }, 400);
@@ -59,14 +60,16 @@ export async function handleBlobs(request, env, url) {
   const key = sessionId + '/' + filename;
 
   if (request.method === 'GET') {
-    const obj = await env.BLOBS.get(key);
+    const obj = await loadBlob(env, key);
     if (!obj) return new Response('not found', { status: 404, headers: corsHeaders() });
-    const headers = {
-      ...corsHeaders(),
-      'content-type': obj.httpMetadata?.contentType || 'model/gltf-binary',
-      'cache-control': 'public, max-age=3600'
-    };
-    return new Response(obj.body, { status: 200, headers });
+    return new Response(obj.body, {
+      status: 200,
+      headers: {
+        ...corsHeaders(),
+        'content-type': obj.contentType,
+        'cache-control': 'public, max-age=3600'
+      }
+    });
   }
 
   if (request.method === 'PUT' || request.method === 'POST') {
@@ -78,8 +81,19 @@ export async function handleBlobs(request, env, url) {
     if (!body.byteLength) return json({ ok: false, error: 'empty body' }, 400);
     if (body.byteLength > GLB_MAX) return json({ ok: false, error: 'file exceeds 25MB limit' }, 413);
     const contentType = request.headers.get('content-type') || 'model/gltf-binary';
-    await env.BLOBS.put(key, body, { httpMetadata: { contentType } });
-    return json({ ok: true, src: '/api/blobs/' + sessionId + '/' + filename, bytes: body.byteLength });
+    const backend = await storeBlob(env, key, body, contentType);
+    if (!backend) {
+      return json({
+        ok: false,
+        error: 'no blob backend available — set Supabase/Vercel/OCI/AWS secrets or enable R2 (see docs/STORAGE_TIERS.md)'
+      }, 503);
+    }
+    return json({
+      ok: true,
+      backend,
+      src: '/api/blobs/' + sessionId + '/' + filename,
+      bytes: body.byteLength
+    });
   }
 
   return json({ ok: false, error: 'method not allowed' }, 405);

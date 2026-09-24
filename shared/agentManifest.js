@@ -17,8 +17,9 @@ export function buildAgentManifest(url) {
     storage: {
       session: 'POST /api/sessions → sessionId + HttpOnly gf_session cookie (7d). Header X-GameForge-Session on API/MCP. ForgeRoom id = sessionId (legacy-shared if missing).',
       library_cap_bytes: 800000,
-      blobs: 'R2 binding BLOBS. PUT/GET /api/blobs/{sessionId}/{name}.glb|.gltf (25MB max). character.src may be /assets/… or /api/blobs/…',
-      optional_mongo: 'Atlas M0 for long-lived snapshots only — not required; see STORAGE_SETUP.md'
+      blob_tier_order: 'assets → supabase → mongo → vercel → oci (Oracle S3) → aws (S3) → r2 last. Env BLOB_TIER_ORDER. See docs/STORAGE_TIERS.md.',
+      blobs: 'PUT/GET /api/blobs/{sessionId}/{name}.glb (25MB). Response includes backend. character.src: /assets/… or /api/blobs/…',
+      secrets: 'SUPABASE_*, BLOB_READ_WRITE_TOKEN, OCI_S3_*, AWS_*, optional MONGODB_DATA_API_*'
     },
     discovery: {
       agent_json: '/agent.json',
@@ -129,7 +130,8 @@ export function buildAgentManifest(url) {
     },
     docs: {
       platform_plan: '/docs/PLATFORM_PLAN.md',
-      storage_setup: '/docs/STORAGE_SETUP.md'
+      storage_setup: '/docs/STORAGE_SETUP.md',
+      storage_tiers: '/docs/STORAGE_TIERS.md'
     }
   };
 }

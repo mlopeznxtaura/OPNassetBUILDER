@@ -3,6 +3,9 @@ main = "worker.js"
 compatibility_date = "2026-06-17"
 account_id = "683f127c03af82423467b6fad679252c"
 
+[vars]
+BLOB_TIER_ORDER = "assets,supabase,mongo,vercel,oci,aws,r2"
+
 [assets]
 directory = "."
 binding = "ASSETS"
@@ -18,8 +21,7 @@ class_name = "ForgeRoom"
 tag = "v1"
 new_sqlite_classes = ["ForgeRoom"]
 
-# After enabling R2 in the dashboard and creating buckets (see docs/STORAGE_SETUP.md), uncomment:
-# [[r2_buckets]]
-# binding = "BLOBS"
-# bucket_name = "opnassetbuilder-blobs"
-# preview_bucket_name = "opnassetbuilder-blobs-preview"
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "opnassetbuilder-blobs"
+preview_bucket_name = "opnassetbuilder-blobs-preview"
