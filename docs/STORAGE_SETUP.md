@@ -6,12 +6,25 @@ app14 keeps **small JSON** per browser session (library + level) and **large GLB
 
 ### Wrangler OAuth (one-time per machine)
 
-```bash
-cd gameforgev1
-# Unset a broken API token so OAuth is used:
-Remove-Item Env:CLOUDFLARE_API_TOKEN -ErrorAction SilentlyContinue   # PowerShell
-npx wrangler login
+**Error `Authentication error [code: 10000]`** almost always means `CLOUDFLARE_API_TOKEN` is set in the environment and is wrong or missing **R2 / Account** permissions. Wrangler prefers that token over OAuth.
+
+PowerShell (every new terminal until you remove the system env var):
+
+```powershell
+cd f:\NextAuraMonth7getrichordietryin\gameforgev1
+Remove-Item Env:CLOUDFLARE_API_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:CLOUDFLARE_API_KEY -ErrorAction SilentlyContinue
+npx wrangler whoami
 ```
+
+If `whoami` still fails, open **Windows Settings → System → Environment variables** and delete `CLOUDFLARE_API_TOKEN` from User or System, then open a **new** terminal.
+
+```powershell
+npx wrangler login
+npx wrangler whoami
+```
+
+Optional API token instead of OAuth: create at Cloudflare Dashboard → **My Profile → API Tokens** with **Account → R2 → Edit** and **Account → Workers Scripts → Edit** (or use the “Edit Cloudflare Workers” template and add R2). Then `set CLOUDFLARE_API_TOKEN=...` only in that session if you prefer tokens over OAuth.
 
 Approve the browser prompt. Verify:
 

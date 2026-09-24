@@ -1,6 +1,7 @@
 name = "nextaura-app14-us"
 main = "worker.js"
 compatibility_date = "2026-06-17"
+account_id = "683f127c03af82423467b6fad679252c"
 
 [assets]
 directory = "."
