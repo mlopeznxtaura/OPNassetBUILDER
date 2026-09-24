@@ -61,7 +61,15 @@
   <select id="assetKind">
     <option value="voxel">Voxel model (3D)</option>
     <option value="sprite">Sprite (2D pixel art)</option>
+    <option value="character">Character mesh (glTF)</option>
   </select>
+  <div id="characterCtl" style="display:none">
+    <label>Base mesh</label>
+    <select id="characterModel">
+      <option value="female-hero">Female hero base (skinned)</option>
+    </select>
+    <div class="hint">Smooth body with a skeleton. Voxel paint does not apply. Orbit to inspect the face, hair, and limbs.</div>
+  </div>
   <div id="voxelSizeCtl">
     <label>Grid size (X × Y × Z)</label>
     <div class="row">
@@ -138,6 +146,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="../shared/vendor/OrbitControls.js"></script>
 <script src="../shared/voxelMesh.js"></script>
 <script>

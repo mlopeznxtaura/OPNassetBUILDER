@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   collidesAt,
   computeVoxelMeshStats,
+  createCharacterAsset,
   createVoxelAsset,
   gfValidateAsset,
   memoryStore,
@@ -10,6 +11,15 @@ import {
   seedVoxelStarter
 } from './forgeCore.js';
 import { callTool, handleMcpMessage } from './mcpTools.js';
+
+test('character asset is a skinned mesh with bone and triangle counts', () => {
+  const asset = createCharacterAsset({ name: 'female hero' });
+  assert.deepEqual(gfValidateAsset(asset), []);
+  assert.equal(asset.character.src, '/assets/female-hero.gltf');
+  assert.ok(asset.character.stats.triangles > 1000);
+  assert.ok(asset.character.stats.bones >= 15);
+  assert.ok(asset.character.stats.materials >= 4);
+});
 
 test('seedVoxelStarter builds a humanoid from hero name', () => {
   const asset = createVoxelAsset({ name: 'female hero', size: [6, 6, 6] });

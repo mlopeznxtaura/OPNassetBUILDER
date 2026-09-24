@@ -1,6 +1,7 @@
 import { createLiveClient } from '../shared/liveClient.js';
 import {
   computeVoxelMeshStats,
+  createCharacterAsset,
   createSpriteAsset,
   createVoxelAsset,
   gfNewId,
@@ -69,7 +70,21 @@ function setStatus(text) {
 }
 function markDirty() { dirty = true; }
 
+let viewStats = null;
+
 function formatMeshStats(asset) {
+  if (asset && asset.kind === 'character') {
+    const mesh = viewStats || (asset.character && asset.character.stats) || {};
+    const pending = !viewStats;
+    return {
+      lines: [
+        pending ? 'Loading skinned mesh…' : `<strong>${(mesh.vertices || 0).toLocaleString()}</strong> vertices`,
+        `<strong>${(mesh.triangles || 0).toLocaleString()}</strong> triangles · <strong>${mesh.materials || 0}</strong> materials`,
+        `<strong>${mesh.bones || 0}</strong> bones · ${asset.character.model || 'character'}`
+      ],
+      toolbar: pending ? 'Loading character…' : `${(mesh.triangles || 0).toLocaleString()} tris · ${mesh.bones || 0} bones`
+    };
+  }
   if (!asset || asset.kind !== 'voxel') {
     if (asset && asset.kind === 'sprite') {
       const opaque = asset.sprite.pixels.filter(Boolean).length;
@@ -296,6 +311,7 @@ function paintPixel(i, erase) {
 
 function loadAsset(asset) {
   selectedLibId = asset.id;
+  viewStats = asset.kind === 'character' ? null : viewStats;
   current = JSON.parse(JSON.stringify(asset));
   document.getElementById('assetName').value = current.name || '';
   document.getElementById('assetCollidable').checked = !!current.collidable;
@@ -306,11 +322,71 @@ function loadAsset(asset) {
   updateMeshStatsUI();
 }
 
+let characterToken = 0;
+
+function inspectCharacter(root) {
+  let vertices = 0;
+  let triangles = 0;
+  let bones = 0;
+  const materials = new Set();
+  root.traverse(obj => {
+    if (obj.isBone) bones++;
+    if (!obj.isMesh) return;
+    const pos = obj.geometry && obj.geometry.getAttribute('position');
+    if (pos) vertices += pos.count;
+    if (obj.geometry && obj.geometry.index) triangles += obj.geometry.index.count / 3;
+    else if (pos) triangles += pos.count / 3;
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach(mat => { if (mat) materials.add(mat.name || mat.uuid); });
+  });
+  return { vertices, triangles, materials: materials.size, bones };
+}
+
+function rebuildCharacterPreview() {
+  const token = ++characterToken;
+  const group = new THREE.Group();
+  setPreview(group);
+  viewStats = null;
+  updateMeshStatsUI();
+  clearGroup(voxelHelperGroup);
+  const src = (current.character && current.character.src) || '/assets/female-hero.gltf';
+  if (!THREE.GLTFLoader) {
+    viewStats = { vertices: 0, triangles: 0, materials: 0, bones: 0 };
+    updateMeshStatsUI();
+    return;
+  }
+  new THREE.GLTFLoader().load(src, (gltf) => {
+    if (token !== characterToken) return;
+    gltf.scene.traverse(obj => {
+      if (obj.isMesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+      }
+    });
+    group.add(gltf.scene);
+    viewStats = inspectCharacter(gltf.scene);
+    controls.target.set(0, 0.95, 0);
+    camera.position.set(1.35, 1.25, 1.9);
+    updateMeshStatsUI();
+  }, undefined, () => {
+    if (token !== characterToken) return;
+    viewStats = current.character.stats;
+    updateMeshStatsUI();
+  });
+}
+
 function readFormNewAsset() {
   const name = document.getElementById('assetName').value.trim() || 'unnamed';
   const kind = document.getElementById('assetKind').value;
   const collidable = document.getElementById('assetCollidable').checked;
   const useStarter = document.getElementById('seedStarter').checked;
+  if (kind === 'character') {
+    return createCharacterAsset({
+      name,
+      model: document.getElementById('characterModel').value,
+      collidable
+    });
+  }
   if (kind === 'voxel') {
     const x = +document.getElementById('vx').value;
     const y = +document.getElementById('vy').value;
@@ -326,11 +402,18 @@ function readFormNewAsset() {
 
 function refreshModeUI() {
   const isVoxel = current.kind === 'voxel';
+  const isCharacter = current.kind === 'character';
   document.getElementById('voxelSizeCtl').style.display = isVoxel ? '' : 'none';
-  document.getElementById('spriteSizeCtl').style.display = isVoxel ? 'none' : '';
+  document.getElementById('spriteSizeCtl').style.display = isVoxel || isCharacter ? 'none' : '';
+  document.getElementById('characterCtl').style.display = isCharacter ? '' : 'none';
   document.getElementById('layerCtl').style.display = isVoxel ? '' : 'none';
-  document.getElementById('spriteEditorWrap').style.display = isVoxel ? 'none' : '';
-  if (isVoxel) {
+  document.getElementById('spriteEditorWrap').style.display = isVoxel || isCharacter ? 'none' : '';
+  document.getElementById('btnReseed').style.display = isCharacter ? 'none' : '';
+  document.getElementById('seedStarter').parentElement.style.display = isCharacter ? 'none' : '';
+  if (isCharacter && current.character) document.getElementById('characterModel').value = current.character.model || 'female-hero';
+  if (isCharacter) {
+    rebuildCharacterPreview();
+  } else if (isVoxel) {
     document.getElementById('layerSlider').max = current.voxel.size[1] - 1;
     document.getElementById('vx').value = current.voxel.size[0];
     document.getElementById('vy').value = current.voxel.size[1];
@@ -343,9 +426,10 @@ function refreshModeUI() {
 }
 
 document.getElementById('assetKind').onchange = (e) => {
-  current = e.target.value === 'voxel'
-    ? createVoxelAsset({ name: document.getElementById('assetName').value.trim(), size: [6, 6, 6], collidable: true })
-    : createSpriteAsset({ name: document.getElementById('assetName').value.trim() });
+  const name = document.getElementById('assetName').value.trim();
+  if (e.target.value === 'voxel') current = createVoxelAsset({ name, size: [6, 6, 6], collidable: true });
+  else if (e.target.value === 'character') current = createCharacterAsset({ name, model: document.getElementById('characterModel').value });
+  else current = createSpriteAsset({ name });
   selectedLibId = null;
   markDirty();
   refreshModeUI();
@@ -365,6 +449,21 @@ document.getElementById('btnNewAsset').onclick = () => {
   document.getElementById('layerSlider').value = 0;
   document.getElementById('layerVal').textContent = '0';
   refreshModeUI();
+};
+
+document.getElementById('characterModel').onchange = () => {
+  if (current.kind !== 'character') return;
+  const next = createCharacterAsset({
+    id: current.id,
+    name: document.getElementById('assetName').value.trim() || current.name,
+    model: document.getElementById('characterModel').value,
+    collidable: document.getElementById('assetCollidable').checked
+  });
+  next.createdAt = current.createdAt;
+  current = next;
+  viewStats = null;
+  dirty = true;
+  rebuildCharacterPreview();
 };
 
 document.getElementById('btnReseed').onclick = () => {
@@ -505,9 +604,11 @@ function applyRemoteLibrary(library) {
   refreshLibraryList();
 
   const nameInField = document.getElementById('assetName').value.trim();
-  const localPaint = current.kind === 'voxel'
-    ? current.voxel.voxels.length > 0
-    : current.sprite.pixels.some(Boolean);
+  const localPaint = current.kind === 'character'
+    ? false
+    : current.kind === 'voxel'
+      ? current.voxel.voxels.length > 0
+      : current.sprite.pixels.some(Boolean);
 
   if (selectedLibId) {
     const updated = library.assets.find(a => a.id === selectedLibId);
@@ -526,8 +627,9 @@ function applyRemoteLibrary(library) {
   if (dirty && localPaint) return;
 
   const candidates = [...added, ...changed].filter(a => {
+    if (a.kind === 'character') return true;
     if (a.kind === 'voxel') return a.voxel.voxels.length > 0;
-    return a.sprite.pixels.some(Boolean);
+    return a.sprite && a.sprite.pixels.some(Boolean);
   });
   if (candidates.length) loadAsset(candidates[candidates.length - 1]);
 }
@@ -555,7 +657,7 @@ async function boot() {
     setStatus('Live');
     seenRevision = data.revision;
     if (data.library) applyRemoteLibrary(data.library);
-    const untouched = !dirty && !document.getElementById('assetName').value.trim() && current.voxel.voxels.length === 0;
+    const untouched = current.kind === 'voxel' && !dirty && !document.getElementById('assetName').value.trim() && current.voxel.voxels.length === 0;
     if (untouched && data.library && data.library.assets.length) loadAsset(data.library.assets[data.library.assets.length - 1]);
     setInterval(poll, 1000);
   } catch (err) {

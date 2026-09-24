@@ -1,3 +1,5 @@
+import { characterModel } from './characterModels.js';
+
 export function gfNewId() {
   return 'a_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
@@ -25,12 +27,13 @@ export function gfValidateAsset(asset) {
   if (!asset || typeof asset !== 'object') return ['asset must be an object'];
   if (!asset.id) errors.push('missing id');
   if (!asset.name) errors.push('missing name');
-  if (asset.kind !== 'voxel' && asset.kind !== 'sprite') errors.push('kind must be voxel or sprite');
+  if (asset.kind !== 'voxel' && asset.kind !== 'sprite' && asset.kind !== 'character') errors.push('kind must be voxel, sprite, or character');
   if (asset.kind === 'voxel') {
     if (!asset.voxel || !Array.isArray(asset.voxel.voxels)) errors.push('voxel data missing');
     else if (!Array.isArray(asset.voxel.size) || asset.voxel.size.length !== 3) errors.push('voxel size missing');
   }
   if (asset.kind === 'sprite' && (!asset.sprite || !Array.isArray(asset.sprite.pixels))) errors.push('sprite data missing');
+  if (asset.kind === 'character' && (!asset.character || !asset.character.src)) errors.push('character mesh missing');
   return errors;
 }
 
@@ -45,6 +48,18 @@ export function createVoxelAsset({ id, name, size = [6, 6, 6], collidable = true
       cellSize: 1,
       voxels: []
     },
+    createdAt: Date.now()
+  };
+}
+
+export function createCharacterAsset({ id, name, model = 'female-hero', collidable = true } = {}) {
+  const spec = characterModel(model);
+  return {
+    id: id || gfNewId(),
+    name: name || spec.label,
+    kind: 'character',
+    collidable: collidable !== false,
+    character: { model: spec.id, src: spec.src, stats: spec.stats },
     createdAt: Date.now()
   };
 }
@@ -291,6 +306,22 @@ export function computeVoxelMeshStats(asset) {
 
 export function summarizeAsset(asset) {
   if (!asset) return null;
+  if (asset.kind === 'character') {
+    const stats = (asset.character && asset.character.stats) || {};
+    return {
+      id: asset.id,
+      name: asset.name,
+      kind: asset.kind,
+      collidable: !!asset.collidable,
+      model: asset.character && asset.character.model,
+      mesh: {
+        vertices: stats.vertices || 0,
+        triangles: stats.triangles || 0,
+        materials: stats.materials || 0,
+        bones: stats.bones || 0
+      }
+    };
+  }
   if (asset.kind === 'voxel') {
     const mesh = computeVoxelMeshStats(asset);
     return {

@@ -73,5 +73,22 @@ function gfBuildSpriteMesh(asset) {
 function gfBuildAssetMesh(asset) {
   if (asset.kind === 'voxel') return gfBuildVoxelMesh(asset);
   if (asset.kind === 'sprite') return gfBuildSpriteMesh(asset);
+  if (asset.kind === 'character') {
+    const group = new THREE.Group();
+    group.name = asset.name || 'character';
+    const src = (asset.character && asset.character.src) || '/assets/female-hero.gltf';
+    if (THREE.GLTFLoader) {
+      new THREE.GLTFLoader().load(src, (gltf) => {
+        gltf.scene.traverse(obj => {
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        group.add(gltf.scene);
+      });
+    }
+    return group;
+  }
   throw new Error('unknown asset kind: ' + asset.kind);
 }

@@ -1,5 +1,6 @@
 import {
   collidesAt,
+  createCharacterAsset,
   createSpriteAsset,
   createVoxelAsset,
   deleteAsset,
@@ -38,7 +39,8 @@ export const TOOLS = [
       properties: {
         id: { type: 'string' },
         name: { type: 'string' },
-        kind: { type: 'string', enum: ['voxel', 'sprite'] },
+        kind: { type: 'string', enum: ['voxel', 'sprite', 'character'] },
+        model: { type: 'string' },
         collidable: { type: 'boolean' },
         size: { type: 'array', items: { type: 'number' } },
         cells: { type: 'array' },
@@ -159,7 +161,15 @@ export async function callTool(name, args, store) {
         let asset;
         if (source.kind === 'voxel' && source.voxel) asset = structuredClone(source);
         else if (source.kind === 'sprite' && source.sprite) asset = structuredClone(source);
-        else if (source.kind === 'sprite') {
+        else if (source.kind === 'character' && source.character) asset = structuredClone(source);
+        else if (source.kind === 'character') {
+          asset = createCharacterAsset({
+            id: source.id,
+            name: source.name,
+            model: source.model,
+            collidable: source.collidable
+          });
+        } else if (source.kind === 'sprite') {
           asset = createSpriteAsset({
             id: source.id,
             name: source.name,
