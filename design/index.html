@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GameForge - Design &amp; Visualize</title>
+<title>OPNassetBUILDER - Design</title>
 <style>
   :root { --bg:#111318; --panel:#1a1d24; --line:#2a2e38; --text:#e8e9ec; --accent:#5cc8ff; }
   * { box-sizing: border-box; }
@@ -42,13 +42,15 @@
   .stats-panel .muted { color:#6b7280; font-size:11px; margin-top:6px; }
   #toolbar .stats-inline { font-size:11px; color:#9aa1ad; font-variant-numeric: tabular-nums; margin-left:auto; }
   #layerCtl { display:flex; align-items:center; gap:8px; }
+  #scanVideo, #scanPreview { width:100%; border-radius:8px; background:#000; margin-top:8px; }
+  #scanVideo { display:none; }
   a.navlink { color:var(--accent); text-decoration:none; font-size:12px; }
 </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h1>GameForge - Design</h1>
+  <h1>OPNassetBUILDER - Design</h1>
   <div class="row" style="justify-content:space-between">
     <span class="badge">Stage 1 / 2</span>
     <a class="navlink" href="../world/index.html">Go to World Viewer</a>
@@ -118,6 +120,15 @@
     <button class="primary" id="btnSave">Save to library</button>
   </div>
   <div id="createHint" class="hint">Create applies the name and grid, seeds a starter mesh when enabled, and updates triangle counts in 3D render stats.</div>
+
+  <h2>Scan</h2>
+  <div class="row">
+    <button id="btnCamera">Start webcam</button>
+    <button id="btnCapture" disabled>Capture</button>
+  </div>
+  <video id="scanVideo" autoplay playsinline muted></video>
+  <img id="scanPreview" alt="Captured scan reference" style="display:none">
+  <div id="scanHint" class="hint">Turns on this browser's webcam. Capture stores a reference photo on the asset. It is not a finished 3D mesh yet.</div>
 
   <h2>3D render stats</h2>
   <div id="meshStats" class="stats-panel">—</div>
