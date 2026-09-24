@@ -4,7 +4,8 @@ import {
   createSpriteAsset,
   createVoxelAsset,
   gfNewId,
-  gfValidateAsset
+  gfValidateAsset,
+  seedVoxelStarter
 } from '../shared/forgeCore.js';
 
 const STORAGE_KEY = 'gameforge_assets_v1';
@@ -83,7 +84,7 @@ function formatMeshStats(asset) {
       lines: [
         `<strong>0</strong> solid voxels`,
         `Grid <strong>${gx}×${gy}×${gz}</strong> (wireframe shown)`,
-        '<span class="muted">No triangles until voxels are painted or an agent sends <code>paint_voxels</code> cells.</span>'
+        '<span class="muted">Enable starter mesh or paint voxels / call <code>upsert_asset</code> or <code>paint_voxels</code>.</span>'
       ],
       toolbar: `0 voxels · grid ${gx}×${gy}×${gz}`
     };
@@ -309,11 +310,14 @@ function readFormNewAsset() {
   const name = document.getElementById('assetName').value.trim() || 'unnamed';
   const kind = document.getElementById('assetKind').value;
   const collidable = document.getElementById('assetCollidable').checked;
+  const useStarter = document.getElementById('seedStarter').checked;
   if (kind === 'voxel') {
     const x = +document.getElementById('vx').value;
     const y = +document.getElementById('vy').value;
     const z = +document.getElementById('vz').value;
-    return createVoxelAsset({ name, size: [x, y, z], collidable });
+    const asset = createVoxelAsset({ name, size: [x, y, z], collidable });
+    if (useStarter) seedVoxelStarter(asset, { hint: name });
+    return asset;
   }
   const w = +document.getElementById('sw').value;
   const h = +document.getElementById('sh').value;

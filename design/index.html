@@ -82,6 +82,10 @@
 
   <label>Collidable in world</label>
   <input type="checkbox" id="assetCollidable" checked style="width:auto">
+  <label style="margin-top:10px">
+    <input type="checkbox" id="seedStarter" checked style="width:auto;margin-right:6px">
+    Add starter 3D mesh from name (humanoid, tree, crate, or block)
+  </label>
 
   <h2>Palette</h2>
   <div class="row">
@@ -104,7 +108,7 @@
     <button class="primary" id="btnNewAsset">Create asset</button>
     <button class="primary" id="btnSave">Save to library</button>
   </div>
-  <div id="createHint" class="hint">Create applies the name and grid above, then shows the 3D bounds. Agents should call <code>paint_voxels</code> with cells to fill the mesh.</div>
+  <div id="createHint" class="hint">Create applies the name and grid, seeds a starter mesh when enabled, and updates triangle counts in 3D render stats.</div>
 
   <h2>3D render stats</h2>
   <div id="meshStats" class="stats-panel">—</div>
