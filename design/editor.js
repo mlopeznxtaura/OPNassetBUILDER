@@ -316,6 +316,7 @@ function loadAsset(asset) {
   document.getElementById('assetName').value = current.name || '';
   document.getElementById('assetCollidable').checked = !!current.collidable;
   document.getElementById('assetKind').value = current.kind;
+  showScanStill(current.scan && current.scan.image);
   dirty = false;
   refreshModeUI();
   refreshLibraryList();
@@ -530,6 +531,64 @@ async function pushAsset(asset) {
   const data = await live.saveAsset(asset);
   live.noteRevision(data.revision);
 }
+
+let scanStream = null;
+const scanVideo = document.getElementById('scanVideo');
+const scanPreview = document.getElementById('scanPreview');
+
+function showScanStill(dataUrl) {
+  if (!dataUrl) {
+    scanPreview.style.display = 'none';
+    scanPreview.removeAttribute('src');
+    return;
+  }
+  scanPreview.src = dataUrl;
+  scanPreview.style.display = 'block';
+}
+
+document.getElementById('btnCamera').onclick = async () => {
+  const button = document.getElementById('btnCamera');
+  const hint = document.getElementById('scanHint');
+  if (scanStream) {
+    scanStream.getTracks().forEach(track => track.stop());
+    scanStream = null;
+    scanVideo.srcObject = null;
+    scanVideo.style.display = 'none';
+    button.textContent = 'Start webcam';
+    document.getElementById('btnCapture').disabled = true;
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    hint.textContent = 'This browser has no webcam API. Open the site in Chrome or Safari over HTTPS.';
+    return;
+  }
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    scanVideo.srcObject = scanStream;
+    scanVideo.style.display = 'block';
+    button.textContent = 'Stop webcam';
+    document.getElementById('btnCapture').disabled = false;
+    hint.textContent = 'Webcam is live. Capture saves a reference photo on this asset.';
+  } catch (err) {
+    hint.textContent = 'Camera permission was blocked. Allow the camera for this site and try again. ' + (err && err.message ? err.message : '');
+  }
+};
+
+document.getElementById('btnCapture').onclick = () => {
+  if (!scanVideo.videoWidth) return;
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(1, 960 / scanVideo.videoWidth);
+  canvas.width = Math.round(scanVideo.videoWidth * scale);
+  canvas.height = Math.round(scanVideo.videoHeight * scale);
+  canvas.getContext('2d').drawImage(scanVideo, 0, 0, canvas.width, canvas.height);
+  current.scan = { image: canvas.toDataURL('image/jpeg', 0.82), capturedAt: Date.now(), width: canvas.width, height: canvas.height };
+  showScanStill(current.scan.image);
+  markDirty();
+  document.getElementById('scanHint').textContent = 'Captured ' + canvas.width + '×' + canvas.height + '. Save to library keeps this reference on the asset.';
+};
 
 document.getElementById('btnSave').onclick = async () => {
   current.name = document.getElementById('assetName').value.trim() || 'unnamed';
