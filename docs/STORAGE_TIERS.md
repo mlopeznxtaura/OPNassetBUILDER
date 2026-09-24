@@ -2,6 +2,13 @@
 
 app14 uploads kit GLBs through **`PUT /api/blobs/{sessionId}/file.glb`**. The Worker tries backends in order until one succeeds. **R2 is last** even though it is enabled on your account.
 
+**One-shot OAuth (Windows, run in your own PowerShell — not the agent terminal):**
+
+- `npm run setup:storage:oauth` — **Supabase → Mongo → Vercel → Oracle → AWS** CLI/browser OAuth only (no Cloudflare).
+- `npm run setup:storage` — same OAuth pass + `wrangler secret put` for each tier.
+- Add `-IncludeCloudflare` only when you want Wrangler/R2 last:  
+  `powershell -File ./scripts/setup-storage-oauth.ps1 -IncludeCloudflare`
+
 ## Default order
 
 | # | Tier | Free-tier sketch | Wrangler secrets / config |
@@ -23,20 +30,15 @@ BLOB_TIER_ORDER = "assets,supabase,mongo,vercel,oci,aws,r2"
 
 ## Oracle Cloud (OCI) object storage
 
-1. Sign up: [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/) (no Cloudflare card).
-2. Create a **bucket** in your **home region**.
-3. **Customer secret keys** for S3-compatible API (User → My profile → Customer secret keys).
-4. Note **namespace**, **region**, and S3 endpoint:  
-   `https://{namespace}.compat.objectstorage.{region}.oraclecloud.com`
-5. Set secrets:
+**Status:** optional until Oracle tenancy is active. Other tiers work without OCI; the Worker skips missing `OCI_S3_*` secrets.
 
-```bash
-npx wrangler secret put OCI_S3_ENDPOINT
-npx wrangler secret put OCI_S3_BUCKET
-npx wrangler secret put OCI_S3_ACCESS_KEY_ID
-npx wrangler secret put OCI_S3_SECRET_ACCESS_KEY
-npx wrangler secret put OCI_S3_REGION
-```
+Full walkthrough: **[ORACLE_OCI_SETUP.md](./ORACLE_OCI_SETUP.md)** · one-shot secrets: `npm run setup:oci`
+
+1. Sign up: [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/) (provisioning can take hours).
+2. Create a **bucket** in your **home region**.
+3. **Customer secret keys** (Profile → My profile → Customer secret keys).
+4. Endpoint: `https://{namespace}.compat.objectstorage.{region}.oraclecloud.com`
+5. `npm run setup:oci` or `wrangler secret put` for each `OCI_S3_*` name.
 
 ## AWS S3
 
@@ -61,12 +63,29 @@ Optional: `AWS_S3_ENDPOINT` for custom endpoints; leave unset for standard AWS.
 
 See `shared/storageTiers.js`.
 
-## Status
+## Status (code vs production)
 
-| Backend | Upload | GET via `/api/blobs/…` |
-|---------|--------|-------------------------|
-| assets | Manual deploy | Static `/assets/` |
-| r2 | Implemented | Implemented |
-| supabase / mongo / vercel / oci / aws | Wired in tier router; enable with secrets |
+| Backend | Upload + GET in Worker | Needs |
+|---------|------------------------|--------|
+| **assets** | `/assets/` static only | `npm run deploy` |
+| **supabase** | Yes | `wrangler secret put` SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, optional SUPABASE_BUCKET |
+| **mongo** | **No** — tier is skipped in code | Not implemented yet |
+| **vercel** | Yes | `BLOB_READ_WRITE_TOKEN` |
+| **oci** | Yes | `OCI_S3_*` (5 secrets) |
+| **aws** | Yes | `AWS_S3_BUCKET`, keys, `AWS_REGION` |
+| **r2** | Yes | `[[r2_buckets]]` in wrangler.toml |
 
-Response field `backend` on successful upload shows which tier stored the file.
+**OAuth / signup ≠ wired.** Logging into Supabase/Vercel/AWS in a browser does nothing until secrets are on the Worker (`npm run setup:storage` → `-SecretsOnly` step).
+
+**R2 meta:** Files stored on Supabase/Vercel/OCI/AWS still write a small `__meta/` record in R2 so `GET /api/blobs/…` can find them. Keep R2 enabled.
+
+**Check production:** `GET https://app14.nextaura.us/api/storage` → `configured` and `first_upload_tier`. After upload, JSON includes `"backend": "supabase"` (etc.).
+
+## Per-session upload URLs (15 minutes)
+
+`POST /api/blobs/{sessionId}/{file.glb}/upload-url` with `X-GameForge-Session` (same as PUT).
+
+- **Supabase / AWS / OCI** (when Worker secrets exist): returns `mode: "direct"` + presigned `uploadUrl` (bytes go straight to that provider; master keys stay on the Worker).
+- **Otherwise** (today: R2, Vercel, paused Supabase): returns `mode: "worker"` + same-origin PUT URL; still session-scoped, expires in ~15 minutes.
+
+Design `uploadBlob()` tries upload-url first, then falls back to PUT.

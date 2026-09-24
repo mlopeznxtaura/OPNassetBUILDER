@@ -1,5 +1,5 @@
 import { ForgeRoom } from './forgeRoom.js';
-import { handleBlobs, handleSessions, parseSessionId } from './workerBlobs.js';
+import { handleBlobs, handleSessions, handleStorageStatus, parseSessionId } from './workerBlobs.js';
 
 export { ForgeRoom };
 
@@ -20,6 +20,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/api/sessions') return handleSessions(request);
+    if (url.pathname === '/api/storage' && request.method === 'GET') return handleStorageStatus(env);
     if (url.pathname.startsWith('/api/blobs/')) return handleBlobs(request, env, url);
     if (isControlPath(url.pathname)) {
       return env.FORGE.get(forgeId(env, request)).fetch(request);

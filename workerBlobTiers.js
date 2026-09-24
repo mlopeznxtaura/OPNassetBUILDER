@@ -2,6 +2,7 @@ import { AwsClient } from 'aws4fetch';
 import { parseTierOrder } from './shared/storageTiers.js';
 
 const META_PREFIX = '__meta/';
+export const UPLOAD_URL_EXPIRES_SEC = 900;
 
 function awsClient(env, region) {
   const access = env.AWS_ACCESS_KEY_ID;
@@ -177,4 +178,118 @@ export async function loadBlob(env, key) {
   }
 
   return null;
+}
+
+async function presignS3Put(client, putUrl, contentType) {
+  const headers = contentType ? { 'content-type': contentType } : undefined;
+  const signed = await client.sign(new Request(putUrl, { method: 'PUT', headers }), {
+    aws: { signQuery: true, expires: UPLOAD_URL_EXPIRES_SEC }
+  });
+  return {
+    mode: 'direct',
+    method: 'PUT',
+    uploadUrl: signed.url,
+    headers: contentType ? { 'content-type': contentType } : {},
+    expiresIn: UPLOAD_URL_EXPIRES_SEC
+  };
+}
+
+async function presignSupabase(env, key, contentType) {
+  const base = env.SUPABASE_URL;
+  const token = env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = env.SUPABASE_BUCKET || 'opn-meshes';
+  if (!base || !token) return null;
+  const path = key.replace(/\//g, '_');
+  const res = await fetch(`${base.replace(/\/$/, '')}/storage/v1/object/upload/sign/${bucket}/${path}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ expiresIn: UPLOAD_URL_EXPIRES_SEC })
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!data.url) return null;
+  await saveMeta(env, key, { backend: 'supabase', bucket, path, contentType });
+  const headers = { 'x-upsert': 'true' };
+  if (data.token) headers.authorization = `Bearer ${data.token}`;
+  return {
+    backend: 'supabase',
+    mode: 'direct',
+    method: 'PUT',
+    uploadUrl: data.url,
+    headers,
+    expiresIn: UPLOAD_URL_EXPIRES_SEC
+  };
+}
+
+async function presignAws(env, key, contentType) {
+  const bucket = env.AWS_S3_BUCKET;
+  const region = env.AWS_REGION || 'us-east-1';
+  const client = awsClient(env, region);
+  if (!bucket || !client) return null;
+  const objectKey = `opnassetbuilder/${key}`;
+  const custom = env.AWS_S3_ENDPOINT;
+  const putUrl = custom
+    ? `${custom.replace(/\/$/, '')}/${bucket}/${objectKey}`
+    : `https://${bucket}.s3.${region}.amazonaws.com/${objectKey}`;
+  const presigned = await presignS3Put(client, putUrl, contentType);
+  await saveMeta(env, key, { backend: 'aws', bucket, objectKey, region, custom: custom || null, contentType });
+  return { backend: 'aws', ...presigned };
+}
+
+async function presignOci(env, key, contentType) {
+  const endpoint = env.OCI_S3_ENDPOINT;
+  const bucket = env.OCI_S3_BUCKET;
+  const region = env.OCI_S3_REGION || 'us-phoenix-1';
+  const client = ociClient(env, region);
+  if (!endpoint || !bucket || !client) return null;
+  const host = endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const objectKey = `opnassetbuilder/${key}`;
+  const putUrl = `https://${host}/${bucket}/${objectKey}`;
+  const presigned = await presignS3Put(client, putUrl, contentType);
+  await saveMeta(env, key, { backend: 'oci', host, bucket, objectKey, region, contentType });
+  return { backend: 'oci', ...presigned };
+}
+
+function presignWorkerPut(origin, sessionId, filename, contentType) {
+  const safe = filename.split('/').pop();
+  return {
+    backend: 'worker',
+    mode: 'worker',
+    method: 'PUT',
+    uploadUrl: `${origin}/api/blobs/${sessionId}/${encodeURIComponent(safe)}`,
+    headers: { 'content-type': contentType || 'model/gltf-binary' },
+    expiresIn: UPLOAD_URL_EXPIRES_SEC,
+    sessionHeader: 'X-GameForge-Session'
+  };
+}
+
+/** Per-session upload URL (~15m). Direct presign when tier supports it; else Worker PUT. */
+export async function issueUploadUrl(env, key, sessionId, filename, contentType, requestUrl) {
+  const ct = contentType || 'model/gltf-binary';
+  const origin = new URL(requestUrl).origin;
+  const baseName = filename.split('/').pop();
+  const direct = {
+    supabase: () => presignSupabase(env, key, ct),
+    aws: () => presignAws(env, key, ct),
+    oci: () => presignOci(env, key, ct)
+  };
+  for (const tier of parseTierOrder(env)) {
+    if (tier === 'assets' || tier === 'mongo' || tier === 'vercel' || tier === 'r2') continue;
+    const run = direct[tier];
+    if (!run) continue;
+    const out = await run();
+    if (out) {
+      return { ok: true, ...out, src: `/api/blobs/${sessionId}/${baseName}` };
+    }
+  }
+  const worker = presignWorkerPut(origin, sessionId, filename, ct);
+  return {
+    ok: true,
+    ...worker,
+    src: `/api/blobs/${sessionId}/${baseName}`,
+    note: 'Upload with X-GameForge-Session matching sessionId; uses normal tier order on PUT.'
+  };
 }

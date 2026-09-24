@@ -1,4 +1,5 @@
-import { storeBlob, loadBlob } from './workerBlobTiers.js';
+import { storeBlob, loadBlob, issueUploadUrl } from './workerBlobTiers.js';
+import { blobTierConfigured, blobTierImplementation, parseTierOrder } from './shared/storageTiers.js';
 
 const GLB_MAX = 25 * 1024 * 1024;
 
@@ -27,6 +28,24 @@ export function newSessionId() {
   return 's_' + hex;
 }
 
+export async function handleStorageStatus(env) {
+  const configured = blobTierConfigured(env);
+  const order = parseTierOrder(env);
+  const firstUploadTier = order.find(t => {
+    if (t === 'assets' || t === 'mongo') return false;
+    return configured[t] === true;
+  }) || null;
+  return json({
+    ok: true,
+    tier_order: order,
+    configured,
+    implementation: blobTierImplementation(),
+    first_upload_tier: firstUploadTier,
+    note:
+      'OAuth on Supabase/Vercel/AWS does not wire the Worker. Run wrangler secret put (npm run setup:storage -SecretsOnly). Upload response field backend shows which tier stored the file.'
+  });
+}
+
 export async function handleSessions(request) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
   if (request.method !== 'POST') return json({ ok: false, error: 'POST to create a session' }, 405);
@@ -47,6 +66,29 @@ function json(data, status = 200, extraHeaders = {}) {
 
 export async function handleBlobs(request, env, url) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
+
+  const uploadUrlMatch = url.pathname.match(/^\/api\/blobs\/(s_[a-zA-Z0-9_-]+)\/([^/]+)\/upload-url$/);
+  if (uploadUrlMatch && request.method === 'POST') {
+    const sessionId = uploadUrlMatch[1];
+    const caller = parseSessionId(request);
+    if (!caller || caller !== sessionId) {
+      return json({ ok: false, error: 'session required; use POST /api/sessions then X-GameForge-Session header' }, 401);
+    }
+    const filename = decodeURIComponent(uploadUrlMatch[2]);
+    if (!/\.(glb|gltf)$/i.test(filename) || filename.includes('..')) {
+      return json({ ok: false, error: 'filename must end with .glb or .gltf' }, 400);
+    }
+    let contentType = 'model/gltf-binary';
+    try {
+      const body = await request.json();
+      if (body && body.contentType) contentType = String(body.contentType);
+    } catch {
+      /* empty body ok */
+    }
+    const key = sessionId + '/' + filename;
+    const issued = await issueUploadUrl(env, key, sessionId, filename, contentType, request.url);
+    return json(issued);
+  }
 
   const match = url.pathname.match(/^\/api\/blobs\/(s_[a-zA-Z0-9_-]+)\/([^/]+)$/);
   if (!match) return json({ ok: false, error: 'path must be /api/blobs/{sessionId}/{filename}.glb' }, 400);

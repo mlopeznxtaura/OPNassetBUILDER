@@ -5,7 +5,12 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --test shared/*.test.js"
+    "test": "node --test shared/*.test.js",
+    "setup:storage": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-storage-oauth.ps1",
+    "setup:storage:oauth": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-storage-oauth.ps1 -OAuthOnly",
+    "setup:oci": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-oci.ps1",
+    "setup:clis": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-storage-clis.ps1",
+    "setup:sync-secrets": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-wrangler-secrets.ps1"
   },
   "dependencies": {
     "aws4fetch": "^1.0.20"

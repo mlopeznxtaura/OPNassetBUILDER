@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BLOB_TIER_ORDER_DEFAULT, parseTierOrder } from './storageTiers.js';
+import { BLOB_TIER_ORDER_DEFAULT, blobTierConfigured, parseTierOrder } from './storageTiers.js';
 
 test('default tier order uses r2 last', () => {
   assert.equal(BLOB_TIER_ORDER_DEFAULT[BLOB_TIER_ORDER_DEFAULT.length - 1], 'r2');
@@ -11,4 +11,17 @@ test('default tier order uses r2 last', () => {
 
 test('parseTierOrder respects env override', () => {
   assert.deepEqual(parseTierOrder({ BLOB_TIER_ORDER: 'aws,oci,r2' }), ['aws', 'oci', 'r2']);
+});
+
+test('blobTierConfigured detects secrets without exposing values', () => {
+  const c = blobTierConfigured({
+    BLOBS: {},
+    SUPABASE_URL: 'https://x.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'k',
+    BLOB_READ_WRITE_TOKEN: 'v'
+  });
+  assert.equal(c.supabase, true);
+  assert.equal(c.vercel, true);
+  assert.equal(c.mongo, false);
+  assert.equal(c.aws, false);
 });

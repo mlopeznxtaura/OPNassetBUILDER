@@ -18,8 +18,9 @@ export function buildAgentManifest(url) {
       session: 'POST /api/sessions → sessionId + HttpOnly gf_session cookie (7d). Header X-GameForge-Session on API/MCP. ForgeRoom id = sessionId (legacy-shared if missing).',
       library_cap_bytes: 800000,
       blob_tier_order: 'assets → supabase → mongo → vercel → oci (Oracle S3) → aws (S3) → r2 last. Env BLOB_TIER_ORDER. See docs/STORAGE_TIERS.md.',
-      blobs: 'PUT/GET /api/blobs/{sessionId}/{name}.glb (25MB). Response includes backend. character.src: /assets/… or /api/blobs/…',
-      secrets: 'SUPABASE_*, BLOB_READ_WRITE_TOKEN, OCI_S3_*, AWS_*, optional MONGODB_DATA_API_*'
+      blobs: 'PUT/GET /api/blobs/{sessionId}/{name}.glb (25MB). POST …/{name}.glb/upload-url → presigned direct upload (15m) or Worker PUT. Response includes backend.',
+      secrets: 'SUPABASE_*, BLOB_READ_WRITE_TOKEN, OCI_S3_*, AWS_* (wrangler secret put — OAuth alone does not connect)',
+      storage_status: 'GET /api/storage — which tiers have Worker secrets; upload JSON field backend shows winner'
     },
     discovery: {
       agent_json: '/agent.json',
@@ -84,7 +85,8 @@ export function buildAgentManifest(url) {
       session_header: 'X-GameForge-Session: s_… (required for blob upload; required for isolated studio — browser sets automatically after POST /api/sessions)',
       endpoints: [
         { method: 'POST', path: '/api/sessions', desc: 'Create session { sessionId, expiresInDays }; Set-Cookie gf_session' },
-        { method: 'PUT', path: '/api/blobs/{sessionId}/{filename}.glb', desc: 'Upload mesh bytes (auth: session header/cookie must match sessionId). Returns { src }' },
+        { method: 'POST', path: '/api/blobs/{sessionId}/{filename}.glb/upload-url', desc: 'Session-scoped upload URL (~15m): direct to Supabase/S3/OCI when configured, else Worker PUT URL' },
+        { method: 'PUT', path: '/api/blobs/{sessionId}/{filename}.glb', desc: 'Upload mesh bytes (auth: session header/cookie must match sessionId). Returns { src, backend }' },
         { method: 'GET', path: '/api/blobs/{sessionId}/{filename}.glb', desc: 'Download mesh from R2' },
         { method: 'GET', path: '/api/health', desc: 'ok, app_id, revision, asset count' },
         { method: 'GET', path: '/api/state', desc: 'Full { revision, library, level }' },
@@ -131,7 +133,9 @@ export function buildAgentManifest(url) {
     docs: {
       platform_plan: '/docs/PLATFORM_PLAN.md',
       storage_setup: '/docs/STORAGE_SETUP.md',
-      storage_tiers: '/docs/STORAGE_TIERS.md'
+      storage_tiers: '/docs/STORAGE_TIERS.md',
+      storage_oauth_wizard: 'npm run setup:storage:oauth — Supabase/Mongo/Vercel/AWS browser OAuth; npm run setup:oci when Oracle tenancy is live',
+      oracle_setup: '/docs/ORACLE_OCI_SETUP.md'
     }
   };
 }

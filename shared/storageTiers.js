@@ -34,3 +34,34 @@ export function parseTierOrder(env) {
   if (!raw || typeof raw !== 'string') return [...BLOB_TIER_ORDER_DEFAULT];
   return raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 }
+
+/** Which blob backends have Worker secrets (no values exposed). */
+export function blobTierConfigured(env) {
+  const hasR2 = Boolean(env && env.BLOBS);
+  return {
+    assets: true,
+    supabase: Boolean(env?.SUPABASE_URL && env?.SUPABASE_SERVICE_ROLE_KEY),
+    mongo: false,
+    vercel: Boolean(env?.BLOB_READ_WRITE_TOKEN),
+    oci: Boolean(
+      env?.OCI_S3_ENDPOINT && env?.OCI_S3_BUCKET && env?.OCI_S3_ACCESS_KEY_ID && env?.OCI_S3_SECRET_ACCESS_KEY
+    ),
+    aws: Boolean(env?.AWS_S3_BUCKET && env?.AWS_ACCESS_KEY_ID && env?.AWS_SECRET_ACCESS_KEY),
+    r2: hasR2,
+    /** External tiers store bytes off-R2; GET still needs R2 for __meta/ pointers. */
+    r2_meta_required: hasR2
+  };
+}
+
+export function blobTierImplementation() {
+  return {
+    assets: 'git deploy /assets/*',
+    supabase: 'PUT/GET wired',
+    mongo: 'not implemented — tier skipped',
+    vercel: 'PUT/GET wired',
+    oci: 'PUT/GET wired',
+    aws: 'PUT/GET wired',
+    r2: 'PUT/GET wired (full object or __meta/)',
+    upload_url: 'POST /api/blobs/{sessionId}/{file.glb}/upload-url — presigned direct upload (15m) or Worker PUT fallback'
+  };
+}

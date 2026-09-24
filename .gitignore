@@ -1,5 +1,7 @@
 .env
 .env.*
+.secrets.local
+wrangler.secrets.env
 *.pem
 *.key
 credentials.json

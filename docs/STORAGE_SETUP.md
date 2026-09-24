@@ -54,7 +54,15 @@ Only if you accept Cloudflare’s R2 enable flow (may ask for payment method on 
 
 Without R2: `PUT /api/blobs/…` returns **503**; use path **A** or **B** below.
 
-Helper script (includes optional R2 steps): `scripts/setup-r2.ps1`.
+Helper scripts:
+
+- **Install CLIs (winget, free):** `npm run setup:clis`
+- **OAuth in your terminal (not agent):** `npm run setup:storage:oauth`
+- **Push secrets to Worker:** `npm run setup:sync-secrets` (Supabase CLI + `.secrets.local` — see `.secrets.local.example`)
+- **Manual wizard:** `npm run setup:storage`
+- **R2 only:** `scripts/setup-r2.ps1`
+
+**Per-session vs cloud tokens:** `POST /api/sessions` creates a random `s_*` studio id; GLBs are stored under `{sessionId}/file.glb`. Cloud providers use **one** free-tier credential on the Worker (not a new API token per visitor). That is normal for serverless; isolation is by session id + 25MB/800KB caps.
 
 ---
 
@@ -79,7 +87,7 @@ npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
 
-**Status:** Worker proxy `PUT /api/blobs` → Supabase is planned; today use path A or enable R2.
+**Status:** Worker `PUT /api/blobs` tries Supabase when secrets are set (see [STORAGE_TIERS.md](./STORAGE_TIERS.md)).
 
 ---
 

@@ -49,12 +49,52 @@ export function createLiveClient() {
     return data;
   }
 
+  async function requestUploadUrl(filename, contentType = 'model/gltf-binary') {
+    await ensureForgeSession();
+    const sid = sessionId();
+    if (!sid) throw new Error('no session');
+    const safe = String(filename || 'mesh.glb').replace(/[^\w.-]+/g, '_').slice(0, 80);
+    const res = await fetch('/api/blobs/' + sid + '/' + safe + '/upload-url', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+        'x-gameforge-session': sid
+      },
+      body: JSON.stringify({ contentType })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.uploadUrl) throw new Error(data.error || ('HTTP ' + res.status));
+    return data;
+  }
+
   async function uploadBlob(filename, bytes, contentType = 'model/gltf-binary') {
     await ensureForgeSession();
     const sid = sessionId();
     if (!sid) throw new Error('no session');
     const safe = String(filename || 'mesh.glb').replace(/[^\w.-]+/g, '_').slice(0, 80);
-    const res = await fetch('/api/blobs/' + sid + '/' + safe, {
+    let issued;
+    try {
+      issued = await requestUploadUrl(safe, contentType);
+    } catch {
+      issued = null;
+    }
+    if (issued && issued.mode === 'direct') {
+      const putRes = await fetch(issued.uploadUrl, {
+        method: issued.method || 'PUT',
+        headers: issued.headers || { 'content-type': contentType },
+        body: bytes
+      });
+      if (!putRes.ok) throw new Error('direct upload failed HTTP ' + putRes.status);
+      return {
+        ok: true,
+        backend: issued.backend,
+        src: issued.src,
+        bytes: bytes.byteLength
+      };
+    }
+    const uploadUrl = issued && issued.uploadUrl ? issued.uploadUrl : '/api/blobs/' + sid + '/' + safe;
+    const res = await fetch(uploadUrl, {
       method: 'PUT',
       credentials: 'include',
       headers: {
@@ -73,6 +113,7 @@ export function createLiveClient() {
     noteRevision(n) { if (typeof n === 'number') revision = n; },
     sessionId: () => sessionId(),
     ensureSession: ensureForgeSession,
+    requestUploadUrl,
     uploadBlob,
     state: () => req('/api/state'),
     saveAsset: (asset) => req('/api/assets', { method: 'POST', body: asset }),
