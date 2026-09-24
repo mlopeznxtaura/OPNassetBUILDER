@@ -1,4 +1,6 @@
-# GameForge
+# OPNassetBUILDER (GameForge)
+
+GitHub: [mlopeznxtaura/OPNassetBUILDER](https://github.com/mlopeznxtaura/OPNassetBUILDER)
 
 Open-source, zero-build, two-stage game asset pipeline. Pure HTML/JS + three.js
 (loaded from CDN via `<script>` tags — no npm, no bundler).
@@ -21,7 +23,8 @@ Browsers block `localStorage` and some module loading on `file://`. Serve the
 folder with any static file server, e.g.:
 
 ```
-cd gameforge
+git clone https://github.com/mlopeznxtaura/OPNassetBUILDER.git
+cd OPNassetBUILDER
 python3 -m http.server 8000
 ```
 
