@@ -382,11 +382,9 @@ function readFormNewAsset() {
   const collidable = document.getElementById('assetCollidable').checked;
   const useStarter = document.getElementById('seedStarter').checked;
   if (kind === 'character') {
-    return createCharacterAsset({
-      name,
-      model: document.getElementById('characterModel').value,
-      collidable
-    });
+    const model = modelForName(name);
+    document.getElementById('characterModel').value = model;
+    return createCharacterAsset({ name, model, collidable });
   }
   if (kind === 'voxel') {
     const x = +document.getElementById('vx').value;

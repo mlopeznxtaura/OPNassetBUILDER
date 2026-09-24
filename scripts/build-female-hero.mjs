@@ -137,59 +137,85 @@ function addEllipsoid(material, part, cx, cy, cz, rx, ry, rz, slices = 16, stack
   });
 }
 
-function addLimb(material, part, from, to, radius, slices = 12, stacks = 8) {
+function addTube(material, part, from, to, r0, r1, slices = 12) {
   const a = worldOf(boneIndex[from]);
   const b = worldOf(boneIndex[to]);
   const dir = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const len = Math.hypot(...dir) || 1;
   const axis = dir.map(v => v / len);
-  const [tx, uy, bz] = basis(axis);
-  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-  const ry = len * 0.5;
-  addSurface(material, part, slices, stacks, (u, v) => {
+  const [tx, , bz] = basis(axis);
+  addSurface(material, part, slices, 1, (u, v) => {
     const theta = u * Math.PI * 2;
-    const phi = v * Math.PI;
-    const sr = Math.sin(phi);
-    const lx = radius * sr * Math.cos(theta);
-    const ly = ry * Math.cos(phi);
-    const lz = radius * sr * Math.sin(theta);
-    const x = mid[0] + tx[0] * lx + uy[0] * ly + bz[0] * lz;
-    const y = mid[1] + tx[1] * lx + uy[1] * ly + bz[1] * lz;
-    const z = mid[2] + tx[2] * lx + uy[2] * ly + bz[2] * lz;
-    const nx = tx[0] * (lx / (radius * radius)) + uy[0] * (ly / (ry * ry)) + bz[0] * (lz / (radius * radius));
-    const ny = tx[1] * (lx / (radius * radius)) + uy[1] * (ly / (ry * ry)) + bz[1] * (lz / (radius * radius));
-    const nz = tx[2] * (lx / (radius * radius)) + uy[2] * (ly / (ry * ry)) + bz[2] * (lz / (radius * radius));
-    return { x, y, z, nx, ny, nz };
+    const radius = r0 + (r1 - r0) * v;
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+    const ox = tx[0] * c * radius + bz[0] * s * radius;
+    const oy = tx[1] * c * radius + bz[1] * s * radius;
+    const oz = tx[2] * c * radius + bz[2] * s * radius;
+    return {
+      x: a[0] + axis[0] * len * v + ox,
+      y: a[1] + axis[1] * len * v + oy,
+      z: a[2] + axis[2] * len * v + oz,
+      nx: ox, ny: oy, nz: oz
+    };
   });
 }
 
-const head = worldOf(boneIndex.head);
-addEllipsoid('skin', 'head', head[0], head[1], head[2], 0.105, 0.125, 0.11, 18, 14);
-addEllipsoid('hair', 'hair', head[0], head[1] + 0.03, head[2] - 0.02, 0.12, 0.13, 0.125, 16, 12);
-addEllipsoid('skin', 'face', head[0], head[1] - 0.02, head[2] + 0.09, 0.018, 0.028, 0.02, 8, 6);
-addEllipsoid('eyes', 'face', head[0] - 0.038, head[1] + 0.02, head[2] + 0.09, 0.016, 0.016, 0.012, 8, 6);
-addEllipsoid('eyes', 'face', head[0] + 0.038, head[1] + 0.02, head[2] + 0.09, 0.016, 0.016, 0.012, 8, 6);
-addLimb('skin', 'head', 'neck', 'head', 0.045, 10, 6);
-addEllipsoid('skin', 'torso', 0, 1.28, 0, 0.15, 0.16, 0.1, 16, 12);
-addEllipsoid('skin', 'torso', 0, 1.12, 0, 0.11, 0.1, 0.08, 14, 10);
-addEllipsoid('skin', 'torso', 0, 0.92, 0.01, 0.155, 0.11, 0.1, 16, 10);
-addEllipsoid('cloth', 'cloth', 0, 1.22, 0.02, 0.155, 0.13, 0.09, 14, 10);
-addEllipsoid('cloth', 'cloth', 0, 0.78, 0, 0.16, 0.16, 0.11, 16, 10);
-addLimb('skin', 'armL', 'shoulder.L', 'elbow.L', 0.045);
-addLimb('skin', 'armL', 'elbow.L', 'hand.L', 0.038);
-addEllipsoid('skin', 'armL', ...worldOf(boneIndex['hand.L']), 0.04, 0.045, 0.03, 8, 6);
-addLimb('skin', 'armR', 'shoulder.R', 'elbow.R', 0.045);
-addLimb('skin', 'armR', 'elbow.R', 'hand.R', 0.038);
-addEllipsoid('skin', 'armR', ...worldOf(boneIndex['hand.R']), 0.04, 0.045, 0.03, 8, 6);
-addLimb('skin', 'legL', 'thigh.L', 'knee.L', 0.065);
-addLimb('skin', 'legL', 'knee.L', 'ankle.L', 0.05);
-addEllipsoid('skin', 'legL', ...worldOf(boneIndex['ankle.L']), 0.045, 0.03, 0.08, 8, 6);
-addLimb('skin', 'legR', 'thigh.R', 'knee.R', 0.065);
-addLimb('skin', 'legR', 'knee.R', 'ankle.R', 0.05);
-addEllipsoid('skin', 'legR', ...worldOf(boneIndex['ankle.R']), 0.045, 0.03, 0.08, 8, 6);
+function clearMesh() {
+  for (const bucket of Object.values(buckets)) {
+    bucket.pos.length = 0;
+    bucket.nrm.length = 0;
+    bucket.joints.length = 0;
+    bucket.weights.length = 0;
+    bucket.idx.length = 0;
+  }
+}
+
+function sculpt(profile) {
+  clearMesh();
+  const female = profile === 'female';
+  const head = worldOf(boneIndex.head);
+  addEllipsoid('skin', 'head', head[0], head[1], head[2], 0.09, 0.11, 0.095, 16, 12);
+  addSurface('hair', 'hair', 14, 6, (u, v) => {
+    const theta = u * Math.PI * 2;
+    const phi = v * Math.PI * 0.55;
+    const sr = Math.sin(phi);
+    return {
+      x: head[0] + 0.098 * sr * Math.cos(theta),
+      y: head[1] + 0.02 + 0.12 * Math.cos(phi),
+      z: head[2] - 0.01 + 0.1 * sr * Math.sin(theta),
+      nx: sr * Math.cos(theta),
+      ny: Math.cos(phi),
+      nz: sr * Math.sin(theta)
+    };
+  });
+  addEllipsoid('eyes', 'face', head[0] - 0.032, head[1] + 0.015, head[2] + 0.082, 0.012, 0.012, 0.008, 6, 4);
+  addEllipsoid('eyes', 'face', head[0] + 0.032, head[1] + 0.015, head[2] + 0.082, 0.012, 0.012, 0.008, 6, 4);
+  addTube('skin', 'head', 'neck', 'head', 0.04, 0.045, 8);
+  const chestR = female ? 0.13 : 0.16;
+  const waistR = female ? 0.09 : 0.12;
+  const hipR = female ? 0.13 : 0.12;
+  addTube('skin', 'torso', 'hips', 'chest', hipR, chestR, 14);
+  addTube('cloth', 'cloth', 'spine', 'chest', waistR + 0.012, chestR + 0.012, 14);
+  addTube('cloth', 'cloth', 'hips', 'spine', hipR + 0.01, waistR + 0.01, 12);
+  addTube('skin', 'armL', 'shoulder.L', 'elbow.L', 0.045, 0.038);
+  addTube('skin', 'armL', 'elbow.L', 'hand.L', 0.036, 0.03);
+  addEllipsoid('skin', 'armL', ...worldOf(boneIndex['hand.L']), 0.032, 0.04, 0.02, 8, 6);
+  addTube('skin', 'armR', 'shoulder.R', 'elbow.R', 0.045, 0.038);
+  addTube('skin', 'armR', 'elbow.R', 'hand.R', 0.036, 0.03);
+  addEllipsoid('skin', 'armR', ...worldOf(boneIndex['hand.R']), 0.032, 0.04, 0.02, 8, 6);
+  addTube('skin', 'legL', 'thigh.L', 'knee.L', 0.07, 0.05);
+  addTube('skin', 'legL', 'knee.L', 'ankle.L', 0.048, 0.038);
+  addEllipsoid('skin', 'legL', ...worldOf(boneIndex['ankle.L']), 0.04, 0.028, 0.07, 8, 4);
+  addTube('skin', 'legR', 'thigh.R', 'knee.R', 0.07, 0.05);
+  addTube('skin', 'legR', 'knee.R', 'ankle.R', 0.048, 0.038);
+  addEllipsoid('skin', 'legR', ...worldOf(boneIndex['ankle.R']), 0.04, 0.028, 0.07, 8, 4);
+}
 
 const materialNames = ['skin', 'hair', 'cloth', 'eyes'];
-const chunks = [];
+let chunks = [];
+let accessors = [];
+let bufferViews = [];
 function pushF32(arr) {
   const buf = Buffer.alloc(arr.length * 4);
   for (let i = 0; i < arr.length; i++) buf.writeFloatLE(arr[i], i * 4);
@@ -211,8 +237,6 @@ function pushU16(arr) {
   return { offset, length: buf.length, count: arr.length };
 }
 
-const accessors = [];
-const bufferViews = [];
 function view(bin, target) {
   const index = bufferViews.length;
   bufferViews.push({ buffer: 0, byteOffset: bin.offset, byteLength: bin.length, target });
@@ -224,31 +248,36 @@ function accessor(viewIndex, count, type, componentType, extra = {}) {
   return index;
 }
 
-const primitives = [];
-let vertices = 0;
-let triangles = 0;
-for (const name of materialNames) {
-  const bucket = buckets[name];
-  const vcount = bucket.pos.length / 3;
-  vertices += vcount;
-  triangles += bucket.idx.length / 3;
-  const pos = pushF32(bucket.pos);
-  const nrm = pushF32(bucket.nrm);
-  const jnt = pushU8(bucket.joints);
-  const wgt = pushF32(bucket.weights);
-  const ind = pushU16(bucket.idx);
-  primitives.push({
-    attributes: {
-      POSITION: accessor(view(pos, 34962), vcount, 'VEC3', 5126, { min: min3(bucket.pos), max: max3(bucket.pos) }),
-      NORMAL: accessor(view(nrm, 34962), vcount, 'VEC3', 5126),
-      JOINTS_0: accessor(view(jnt, 34962), vcount, 'VEC4', 5121),
-      WEIGHTS_0: accessor(view(wgt, 34962), vcount, 'VEC4', 5126)
-    },
-    indices: accessor(view(ind, 34963), bucket.idx.length, 'SCALAR', 5123),
-    material: materialNames.indexOf(name),
-    mode: 4
-  });
-}
+function emit(id, cloth) {
+  chunks = [];
+  accessors = [];
+  bufferViews = [];
+  const primitives = [];
+  let vertices = 0;
+  let triangles = 0;
+  for (const name of materialNames) {
+    const bucket = buckets[name];
+    const vcount = bucket.pos.length / 3;
+    if (!vcount) continue;
+    vertices += vcount;
+    triangles += bucket.idx.length / 3;
+    const pos = pushF32(bucket.pos);
+    const nrm = pushF32(bucket.nrm);
+    const jnt = pushU8(bucket.joints);
+    const wgt = pushF32(bucket.weights);
+    const ind = pushU16(bucket.idx);
+    primitives.push({
+      attributes: {
+        POSITION: accessor(view(pos, 34962), vcount, 'VEC3', 5126, { min: min3(bucket.pos), max: max3(bucket.pos) }),
+        NORMAL: accessor(view(nrm, 34962), vcount, 'VEC3', 5126),
+        JOINTS_0: accessor(view(jnt, 34962), vcount, 'VEC4', 5121),
+        WEIGHTS_0: accessor(view(wgt, 34962), vcount, 'VEC4', 5126)
+      },
+      indices: accessor(view(ind, 34963), bucket.idx.length, 'SCALAR', 5123),
+      material: materialNames.indexOf(name),
+      mode: 4
+    });
+  }
 
 const ibms = [];
 for (const bone of bones) {
@@ -262,7 +291,7 @@ const bin = Buffer.concat(chunks);
 const colors = {
   skin: [0.79, 0.58, 0.48, 1],
   hair: [0.18, 0.09, 0.06, 1],
-  cloth: [0.72, 0.29, 0.48, 1],
+  cloth,
   eyes: [0.08, 0.09, 0.12, 1]
 };
 
@@ -273,7 +302,7 @@ const nodes = bones.map(bone => ({
 }));
 nodes.forEach(node => { if (!node.children.length) delete node.children; });
 const meshNode = nodes.length;
-nodes.push({ name: 'female-hero', mesh: 0, skin: 0 });
+nodes.push({ name: id, mesh: 0, skin: 0 });
 
 const stats = {
   vertices,
@@ -283,12 +312,12 @@ const stats = {
 };
 
 const gltf = {
-  asset: { version: '2.0', generator: 'OPNassetBUILDER female-hero', extras: { meshStats: stats } },
+  asset: { version: '2.0', generator: 'OPNassetBUILDER ' + id, extras: { meshStats: stats } },
   scene: 0,
-  scenes: [{ name: 'female-hero', nodes: [0, meshNode] }],
+  scenes: [{ name: id, nodes: [0, meshNode] }],
   nodes,
   skins: [{ name: 'humanoid', joints: bones.map((_, i) => i), inverseBindMatrices: ibmAccessor, skeleton: 0 }],
-  meshes: [{ name: 'female-hero', primitives }],
+  meshes: [{ name: id, primitives }],
   materials: materialNames.map(name => ({
     name,
     pbrMetallicRoughness: {
@@ -301,6 +330,16 @@ const gltf = {
   bufferViews,
   accessors
 };
+  return {
+    gltf,
+    model: {
+      id,
+      label: id === 'male-hero' ? 'Male hero base' : 'Female hero base',
+      src: '/assets/' + id + '.gltf',
+      stats
+    }
+  };
+}
 
 function min3(arr) {
   let x = Infinity, y = Infinity, z = Infinity;
@@ -318,18 +357,22 @@ function max3(arr) {
 }
 
 mkdirSync(join(root, 'assets'), { recursive: true });
-writeFileSync(join(root, 'assets', 'female-hero.gltf'), JSON.stringify(gltf));
-writeFileSync(join(root, 'shared', 'characterModels.js'), `export const CHARACTER_MODELS = {
-  'female-hero': {
-    id: 'female-hero',
-    label: 'Female hero base',
-    src: '/assets/female-hero.gltf',
-    stats: ${JSON.stringify(stats)}
-  }
-};
+const written = [];
+for (const [profile, id, cloth] of [
+  ['female', 'female-hero', [0.72, 0.29, 0.48, 1]],
+  ['male', 'male-hero', [0.2, 0.32, 0.55, 1]]
+]) {
+  sculpt(profile);
+  const { gltf, model } = emit(id, cloth);
+  writeFileSync(join(root, 'assets', id + '.gltf'), JSON.stringify(gltf));
+  written.push(model);
+  console.log(id, model.stats);
+}
+
+const catalog = Object.fromEntries(written.map(model => [model.id, model]));
+writeFileSync(join(root, 'shared', 'characterModels.js'), `export const CHARACTER_MODELS = ${JSON.stringify(catalog, null, 2)};
 
 export function characterModel(id) {
   return CHARACTER_MODELS[id] || CHARACTER_MODELS['female-hero'];
 }
 `);
-console.log(stats);
