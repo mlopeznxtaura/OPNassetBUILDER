@@ -29,8 +29,21 @@ python3 -m http.server 8000
 ```
 
 Then open `http://localhost:8000/design/index.html` to build assets, and
-`http://localhost:8000/world/index.html` to place and test them. This repo
-intentionally has no other host/env/network requirements.
+`http://localhost:8000/world/index.html` to place and test them.
+
+### Production (Cloudflare Workers)
+
+Live site: **https://app14.nextaura.us** (Worker `nextaura-app14-us`).
+
+```bash
+npm install
+export CLOUDFLARE_API_TOKEN=...   # Workers Scripts Edit (+ Account read)
+export CLOUDFLARE_ACCOUNT_ID=...  # optional if already in wrangler.toml
+npm run deploy
+```
+
+Pushes to `main` also deploy via GitHub Actions when repo secrets
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set.
 
 ## File layout
 
