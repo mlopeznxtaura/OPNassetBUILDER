@@ -112,6 +112,92 @@ export function paintVoxelCells(asset, cells) {
   return errors;
 }
 
+export function seedVoxelStarter(asset, { hint, force = false } = {}) {
+  if (!asset || asset.kind !== 'voxel' || !asset.voxel) {
+    return { seeded: false, template: null, voxelCount: 0 };
+  }
+  if (asset.voxel.voxels.length && !force) {
+    return { seeded: false, template: null, voxelCount: asset.voxel.voxels.length };
+  }
+  if (force) asset.voxel.voxels = [];
+
+  const [sx, sy, sz] = asset.voxel.size;
+  const name = String(hint || asset.name || '').toLowerCase();
+  const cx = Math.floor(sx / 2);
+  const cz = Math.floor(sz / 2);
+  const cells = [];
+  const add = (x, y, z, c) => {
+    if (x >= 0 && y >= 0 && z >= 0 && x < sx && y < sy && z < sz) cells.push({ x, y, z, c });
+  };
+
+  const skin = '#e8b4a0';
+  const shirt = '#5c9fe0';
+  const pants = '#334466';
+  const wood = '#a06828';
+  const leaf = '#6fbf6f';
+  const crateColor = '#c49a6c';
+
+  let template = 'block';
+  const isCharacter = /(hero|human|npc|player|character|female|male|person|goblin|knight|avatar|warrior)/.test(name);
+  const isTree = /(tree|plant|bush)/.test(name);
+  const isCrate = /(crate|box|chest|barrel)/.test(name);
+
+  if (isCharacter) {
+    template = 'humanoid';
+    const headH = Math.min(2, sy);
+    const legH = Math.min(2, Math.max(1, Math.floor(sy / 4)));
+    const bodyTop = sy - headH;
+    const bodyBottom = legH;
+    for (let y = bodyTop; y < sy; y++) {
+      for (let dx = -1; dx <= 0; dx++) {
+        for (let dz = -1; dz <= 0; dz++) add(cx + dx, y, cz + dz, skin);
+      }
+    }
+    for (let y = bodyBottom; y < bodyTop; y++) {
+      for (let dx = -1; dx <= 0; dx++) {
+        for (let dz = -1; dz <= 0; dz++) add(cx + dx, y, cz + dz, shirt);
+      }
+    }
+    for (let y = 0; y < legH; y++) {
+      add(cx - 1, y, cz, pants);
+      add(cx, y, cz, pants);
+    }
+  } else if (isTree) {
+    template = 'tree';
+    const trunkH = Math.min(3, Math.max(2, Math.floor(sy / 2)));
+    for (let y = 0; y < trunkH; y++) add(cx, y, cz, wood);
+    const canopyY = trunkH;
+    for (let dy = 0; dy < 2 && canopyY + dy < sy; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          if (Math.abs(dx) + Math.abs(dz) <= 1) add(cx + dx, canopyY + dy, cz + dz, leaf);
+        }
+      }
+    }
+  } else if (isCrate) {
+    template = 'crate';
+    const w = Math.min(3, sx);
+    const h = Math.min(3, sy);
+    const d = Math.min(3, sz);
+    const ox = Math.max(0, cx - Math.floor(w / 2));
+    const oz = Math.max(0, cz - Math.floor(d / 2));
+    for (let y = 0; y < h; y++) {
+      for (let x = ox; x < ox + w; x++) {
+        for (let z = oz; z < oz + d; z++) add(x, y, z, crateColor);
+      }
+    }
+  } else {
+    for (let y = 0; y < Math.min(2, sy); y++) {
+      for (let dx = -1; dx <= 0; dx++) {
+        for (let dz = -1; dz <= 0; dz++) add(cx + dx, y, cz + dz, '#e05252');
+      }
+    }
+  }
+
+  paintVoxelCells(asset, cells);
+  return { seeded: true, template, voxelCount: asset.voxel.voxels.length };
+}
+
 export function paintSpritePixels(asset, pixels) {
   if (!asset || asset.kind !== 'sprite' || !asset.sprite) throw new Error('not a sprite asset');
   const { w, h } = asset.sprite;

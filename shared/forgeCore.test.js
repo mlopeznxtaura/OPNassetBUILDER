@@ -6,9 +6,19 @@ import {
   createVoxelAsset,
   gfValidateAsset,
   memoryStore,
-  paintVoxelCells
+  paintVoxelCells,
+  seedVoxelStarter
 } from './forgeCore.js';
 import { callTool, handleMcpMessage } from './mcpTools.js';
+
+test('seedVoxelStarter builds a humanoid from hero name', () => {
+  const asset = createVoxelAsset({ name: 'female hero', size: [6, 6, 6] });
+  const result = seedVoxelStarter(asset);
+  assert.equal(result.seeded, true);
+  assert.equal(result.template, 'humanoid');
+  assert.ok(asset.voxel.voxels.length > 8);
+  assert.ok(computeVoxelMeshStats(asset).triangles > 0);
+});
 
 test('mesh stats count exposed faces on a single voxel', () => {
   const asset = createVoxelAsset({ name: 'cube', size: [2, 2, 2] });
