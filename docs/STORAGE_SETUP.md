@@ -27,10 +27,13 @@ npx wrangler whoami
 ```bash
 npx wrangler r2 bucket create opnassetbuilder-blobs
 npx wrangler r2 bucket create opnassetbuilder-blobs-preview
+Uncomment the `[[r2_buckets]]` block in `wrangler.toml`, then:
+
+```bash
 npm run deploy
 ```
 
-Until R2 is enabled, `PUT /api/blobs/…` returns **503** with a setup hint; sessions and library API still work.
+Until R2 is enabled and `wrangler.toml` binding is active, `PUT /api/blobs/…` returns **503**; **sessions** and per-session library API still work.
 
 After deploy:
 
