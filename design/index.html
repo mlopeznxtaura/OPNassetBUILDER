@@ -10,8 +10,26 @@
   body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); display:flex; height:100vh; overflow:auto; }
   #sidebar { width:300px; flex:0 0 300px; background:var(--panel); border-right:1px solid var(--line); padding:14px; overflow-y:auto; }
   #main { flex:1 0 360px; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  #mainBody { flex:1; display:flex; min-height:0; min-width:0; }
   #toolbar { display:flex; gap:8px; padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line); align-items:center; flex-wrap:wrap; }
-  #viewport { flex:1; min-height:0; position:relative; background:#14161c; }
+  #viewport { flex:1; min-width:0; min-height:0; position:relative; background:#14161c; }
+  #scanSection { flex:0 0 min(42vw, 520px); min-width:300px; max-width:560px; display:flex; flex-direction:column; background:#10131a; border-left:1px solid var(--line); min-height:0; }
+  #scanSection h2 { margin:14px 0 10px; padding:0 14px; }
+  #scanBody { flex:1; display:flex; min-height:0; }
+  #scanCenter { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px 10px 14px; gap:12px; }
+  #scanFrame { width:100%; max-width:420px; flex:1; min-height:120px; max-height:min(52vh, 520px); display:flex; align-items:center; justify-content:center; position:relative; }
+  #scanStage { position:relative; width:100%; max-height:100%; display:none; border-radius:10px; overflow:hidden; background:#000; box-shadow:0 8px 32px rgba(0,0,0,.45); }
+  #scanStage.live { display:block; }
+  #scanVideo, #scanGuide { width:100%; max-height:min(52vh, 520px); display:block; object-fit:contain; }
+  #scanGuide { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  #scanPreview { display:none; max-width:100%; max-height:min(52vh, 520px); width:auto; height:auto; border-radius:10px; background:#000; box-shadow:0 8px 32px rgba(0,0,0,.45); object-fit:contain; }
+  #scanIdle { font-size:12px; color:#6b7280; text-align:center; padding:24px 16px; border:1px dashed var(--line); border-radius:10px; width:100%; max-width:420px; }
+  #scanPrimary { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; width:100%; max-width:420px; }
+  #scanPrimary button { flex:1; min-width:120px; padding:10px 14px; font-size:13px; }
+  #scanRail { flex:0 0 168px; padding:12px 12px 14px; border-left:1px solid var(--line); overflow-y:auto; background:var(--panel); }
+  #scanRail label { margin-top:0; }
+  #scanRail button { width:100%; margin-top:8px; }
+  #scanRail #scanHint { margin-top:12px; }
   #bootError { display:none; margin:12px; padding:10px 12px; background:#4a1f24; border-radius:8px; font-size:13px; }
   #viewport canvas { display:block; }
   h1 { font-size:15px; margin:0 0 12px; color:var(--accent); }
@@ -44,11 +62,6 @@
   .stats-panel .muted { color:#6b7280; font-size:11px; margin-top:6px; }
   #toolbar .stats-inline { font-size:11px; color:#9aa1ad; font-variant-numeric: tabular-nums; margin-left:auto; }
   #layerCtl { display:flex; align-items:center; gap:8px; }
-  #scanStage { position:relative; margin-top:8px; display:none; border-radius:8px; overflow:hidden; background:#000; }
-  #scanStage.live { display:block; }
-  #scanVideo, #scanGuide { width:100%; display:block; }
-  #scanGuide { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-  #scanPreview { width:100%; border-radius:8px; background:#000; margin-top:8px; }
   a.navlink { color:var(--accent); text-decoration:none; font-size:12px; }
 </style>
 </head>
@@ -128,24 +141,6 @@
   </div>
   <div id="createHint" class="hint">Create applies the name and grid, seeds a starter mesh when enabled, and updates triangle counts in 3D render stats.</div>
 
-  <h2>Scan</h2>
-  <label>Camera</label>
-  <select id="scanCamera" disabled>
-    <option value="">Default camera</option>
-  </select>
-  <div class="row" style="margin-top:8px; flex-wrap:wrap">
-    <button id="btnCamera">Start webcam</button>
-    <button id="btnCapture" disabled>Capture</button>
-    <button id="btnScan360" disabled>Scan 360</button>
-    <button id="btnExportScan" disabled>Export scan ZIP</button>
-  </div>
-  <div id="scanStage">
-    <video id="scanVideo" autoplay playsinline muted></video>
-    <canvas id="scanGuide"></canvas>
-  </div>
-  <img id="scanPreview" alt="Captured scan reference" style="display:none">
-  <div id="scanHint" class="hint">Start the webcam and step back until the body guide turns green. On Mac, iPhone may appear in the camera list. Windows Phone USB is not a PC webcam — open this page on the phone browser to use its camera.</div>
-
   <h2>3D render stats</h2>
   <div id="meshStats" class="stats-panel">—</div>
 
@@ -169,7 +164,37 @@
     <span id="toolbarStats" class="stats-inline"></span>
   </div>
   <div id="bootError"></div>
-  <div id="viewport"></div>
+  <div id="mainBody">
+    <div id="viewport"></div>
+    <section id="scanSection" aria-label="Body scan">
+      <h2>Scan</h2>
+      <div id="scanBody">
+        <div id="scanCenter">
+          <div id="scanFrame">
+            <div id="scanIdle">Start the webcam to see the body guide. Step back until the outline turns green.</div>
+            <div id="scanStage">
+              <video id="scanVideo" autoplay playsinline muted></video>
+              <canvas id="scanGuide"></canvas>
+            </div>
+            <img id="scanPreview" alt="Captured scan reference">
+          </div>
+          <div id="scanPrimary">
+            <button class="primary" id="btnCapture" disabled>Capture</button>
+            <button class="primary" id="btnScan360" disabled>Scan 360</button>
+          </div>
+        </div>
+        <aside id="scanRail">
+          <label for="scanCamera">Camera</label>
+          <select id="scanCamera" disabled>
+            <option value="">Default camera</option>
+          </select>
+          <button id="btnCamera">Start webcam</button>
+          <button id="btnExportScan" disabled>Export scan ZIP</button>
+          <div id="scanHint" class="hint">On Mac, iPhone may appear in the camera list. Windows Phone USB is not a PC webcam — open this page on the phone browser to use its camera.</div>
+        </aside>
+      </div>
+    </section>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

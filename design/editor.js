@@ -598,7 +598,15 @@ const SCAN_DEVICE_KEY = 'opn_scan_camera_device';
 const scanVideo = document.getElementById('scanVideo');
 const scanPreview = document.getElementById('scanPreview');
 const scanStage = document.getElementById('scanStage');
+const scanIdle = document.getElementById('scanIdle');
 const scanGuide = document.getElementById('scanGuide');
+
+function updateScanIdle() {
+  if (!scanIdle) return;
+  const live = scanStage && scanStage.classList.contains('live');
+  const still = scanPreview && scanPreview.style.display !== 'none' && scanPreview.src;
+  scanIdle.style.display = live || still ? 'none' : 'block';
+}
 const guideCtx = scanGuide.getContext('2d');
 
 function drawPolyline(points, color, width) {
@@ -722,6 +730,8 @@ async function startScanStream() {
   scanStream = await navigator.mediaDevices.getUserMedia(videoConstraints());
   scanVideo.srcObject = scanStream;
   scanStage.classList.add('live');
+  if (scanPreview) scanPreview.style.display = 'none';
+  updateScanIdle();
   document.getElementById('btnCamera').textContent = 'Stop webcam';
   document.getElementById('btnCapture').disabled = false;
   await refreshCameraDeviceList();
@@ -755,10 +765,12 @@ function showScanStill(dataUrl) {
   if (!dataUrl) {
     scanPreview.style.display = 'none';
     scanPreview.removeAttribute('src');
+    updateScanIdle();
     return;
   }
   scanPreview.src = dataUrl;
   scanPreview.style.display = 'block';
+  updateScanIdle();
 }
 
 document.getElementById('btnCamera').onclick = async () => {
@@ -772,6 +784,7 @@ document.getElementById('btnCamera').onclick = async () => {
     cancelAnimationFrame(poseLoop);
     poseLoop = 0;
     scanStage.classList.remove('live');
+    updateScanIdle();
     guideCtx.clearRect(0, 0, scanGuide.width, scanGuide.height);
     button.textContent = 'Start webcam';
     document.getElementById('btnCapture').disabled = true;
