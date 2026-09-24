@@ -2,7 +2,10 @@
   "mcpServers": {
     "gameforge": {
       "command": "node",
-      "args": ["mcp/stdio.js"]
+      "args": ["mcp/stdio.js"],
+      "env": {
+        "GAMEFORGE_ORIGIN": "https://app14.nextaura.us"
+      }
     }
   }
 }

@@ -1,4 +1,5 @@
 import { ForgeRoom } from './forgeRoom.js';
+import { handleBlobs, handleSessions, parseSessionId } from './workerBlobs.js';
 
 export { ForgeRoom };
 
@@ -10,12 +11,18 @@ function isControlPath(pathname) {
     || pathname.startsWith('/api/');
 }
 
+function forgeId(env, request) {
+  const sessionId = parseSessionId(request) || 'legacy-shared';
+  return env.FORGE.idFromName(sessionId);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/api/sessions') return handleSessions(request);
+    if (url.pathname.startsWith('/api/blobs/')) return handleBlobs(request, env, url);
     if (isControlPath(url.pathname)) {
-      const id = env.FORGE.idFromName('gameforge');
-      return env.FORGE.get(id).fetch(request);
+      return env.FORGE.get(forgeId(env, request)).fetch(request);
     }
     return env.ASSETS.fetch(request);
   }

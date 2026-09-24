@@ -43,6 +43,7 @@ test('character asset is a skinned mesh with bone and triangle counts', () => {
 
 test('character.src must be same-origin under /assets/', () => {
   assert.equal(isAllowedCharacterSrc('/assets/hero.glb'), true);
+  assert.equal(isAllowedCharacterSrc('/api/blobs/s_abc123/hero.glb'), true);
   assert.equal(isAllowedCharacterSrc('https://evil.com/x.glb'), false);
   assert.equal(isAllowedCharacterSrc('/assets/../etc/passwd'), false);
   const custom = createCharacterAsset({ name: 'rig', src: '/assets/custom.glb' });

@@ -1,4 +1,5 @@
 const origin = process.env.GAMEFORGE_ORIGIN || 'https://app14.nextaura.us';
+const session = process.env.GAMEFORGE_SESSION || '';
 
 function send(obj) {
   const payload = Buffer.from(JSON.stringify(obj), 'utf8');
@@ -7,9 +8,11 @@ function send(obj) {
 }
 
 async function forward(text) {
+  const headers = { 'content-type': 'application/json', accept: 'application/json' };
+  if (session) headers['x-gameforge-session'] = session;
   const res = await fetch(origin + '/mcp', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers,
     body: text
   });
   if (res.status === 202) return;

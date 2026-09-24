@@ -16,3 +16,8 @@ class_name = "ForgeRoom"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ForgeRoom"]
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "opnassetbuilder-blobs"
+preview_bucket_name = "opnassetbuilder-blobs-preview"

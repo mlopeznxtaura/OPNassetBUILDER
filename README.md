@@ -58,11 +58,12 @@ gameforge/
 
 ## Agents & MCP
 
-- **Discovery**: `GET /agent.json`, `GET /agent.txt`, `GET /.well-known/agent.json`
-- **Docs page**: `/agents/index.html`
-- **MCP**: `POST /mcp` (JSON-RPC: `tools/list`, `tools/call`)
-- **State**: `GET /api/state` returns `{ revision, library, level }`
-- **Stdio proxy**: `node mcp/stdio.js` with `GAMEFORGE_ORIGIN=https://your-host`
+- **Discovery**: `GET /agent.json`, `GET /agent.txt`, `/agents/index.html`
+- **Plan**: [docs/PLATFORM_PLAN.md](docs/PLATFORM_PLAN.md) — sessions, R2 blobs, scan vs kit pipelines
+- **Ops**: [docs/STORAGE_SETUP.md](docs/STORAGE_SETUP.md) — Wrangler OAuth, R2 buckets, optional MongoDB Atlas M0
+- **Session**: `POST /api/sessions` → per-user studio; header `X-GameForge-Session` on API/MCP
+- **Blobs**: `PUT /api/blobs/{sessionId}/file.glb` (R2) — use returned path as `character.src`
+- **MCP**: `POST /mcp` (JSON-RPC). Stdio: `GAMEFORGE_ORIGIN` + `GAMEFORGE_SESSION` → `node mcp/stdio.js`
 
 Tools: `list_assets`, `get_asset`, `upsert_asset`, `paint_voxels`, `paint_sprite`, `delete_asset`, `get_level`, `place`, `remove_placement`, `clear_level`, `test_level`.
 

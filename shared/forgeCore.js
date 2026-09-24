@@ -22,8 +22,12 @@ function clampInt(n, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+import { isBlobCharacterSrc } from './blobPaths.js';
+
 export function isAllowedCharacterSrc(src) {
-  if (typeof src !== 'string' || !src.startsWith('/assets/')) return false;
+  if (typeof src !== 'string') return false;
+  if (isBlobCharacterSrc(src)) return true;
+  if (!src.startsWith('/assets/')) return false;
   if (src.includes('..') || src.includes('//')) return false;
   return /\.(gltf|glb)$/i.test(src);
 }
