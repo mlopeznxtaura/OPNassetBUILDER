@@ -13,3 +13,10 @@ mcp/**
 shared/mcpTools.js
 shared/forgeCore.test.js
 .assetsignore
+node_modules
+node_modules/**
+package-lock.json
+.github
+.github/**
+deploy
+deploy/**
