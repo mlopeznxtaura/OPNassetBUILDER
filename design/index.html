@@ -63,7 +63,7 @@
     <option value="sprite">Sprite (2D pixel art)</option>
   </select>
   <div id="voxelSizeCtl">
-    <label>Grid size (X Ã— Y Ã— Z)</label>
+    <label>Grid size (X × Y × Z)</label>
     <div class="row">
       <input type="number" id="vx" value="6" min="1" max="24">
       <input type="number" id="vy" value="6" min="1" max="24">
@@ -72,7 +72,7 @@
     </div>
   </div>
   <div id="spriteSizeCtl" style="display:none">
-    <label>Sprite size (W Ã— H)</label>
+    <label>Sprite size (W × H)</label>
     <div class="row">
       <input type="number" id="sw" value="16" min="1" max="64">
       <input type="number" id="sh" value="16" min="1" max="64">
@@ -106,6 +106,7 @@
 
   <div class="row" style="margin-top:16px; flex-wrap:wrap">
     <button class="primary" id="btnNewAsset">Create asset</button>
+    <button id="btnReseed">Rebuild starter</button>
     <button class="primary" id="btnSave">Save to library</button>
   </div>
   <div id="createHint" class="hint">Create applies the name and grid, seeds a starter mesh when enabled, and updates triangle counts in 3D render stats.</div>

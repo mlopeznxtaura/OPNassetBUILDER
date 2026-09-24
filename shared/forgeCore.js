@@ -112,6 +112,51 @@ export function paintVoxelCells(asset, cells) {
   return errors;
 }
 
+function fillBox(add, x0, y0, z0, x1, y1, z1, color) {
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      for (let z = z0; z <= z1; z++) add(x, y, z, color);
+    }
+  }
+}
+
+function paintHumanoid(add, sx, sy, sz, female) {
+  const skin = '#e8b4a0';
+  const hair = female ? '#3a2418' : '#2a241c';
+  const shirt = female ? '#c15c8a' : '#3d6ea8';
+  const pants = female ? '#2c3e6b' : '#2a3344';
+  const boot = '#1a1a1a';
+  const eye = '#1c2430';
+  const cx = Math.floor((sx - 1) / 2);
+  const cz = Math.floor((sz - 1) / 2);
+  const headTop = sy - 1;
+  const headBottom = Math.max(0, sy - 4);
+  const torsoTop = headBottom - 1;
+  const hipY = Math.max(0, Math.floor(sy * 0.38));
+  const torsoBottom = hipY + 1;
+
+  fillBox(add, cx - 1, headBottom, cz - 1, cx + 1, headTop - 1, cz + 1, skin);
+  fillBox(add, cx - 1, headTop, cz - 1, cx + 1, headTop, cz + 1, hair);
+  fillBox(add, cx - 2, headBottom + 1, cz, cx - 2, headTop, cz, hair);
+  fillBox(add, cx + 2, headBottom + 1, cz, cx + 2, headTop, cz, hair);
+  if (female) fillBox(add, cx - 1, headBottom, cz - 2, cx + 1, headTop - 2, cz - 2, hair);
+  add(cx - 1, headBottom + 1, cz + 1, eye);
+  add(cx + 1, headBottom + 1, cz + 1, eye);
+
+  fillBox(add, cx - 1, torsoBottom, cz - 1, cx + 1, torsoTop, cz, shirt);
+  const armTop = torsoTop;
+  const armBottom = Math.max(hipY, torsoTop - 3);
+  fillBox(add, cx - 3, armBottom, cz, cx - 2, armTop, cz, skin);
+  fillBox(add, cx + 2, armBottom, cz, cx + 3, armTop, cz, skin);
+
+  fillBox(add, cx - 1, hipY, cz - 1, cx, torsoBottom - 1, cz, pants);
+  fillBox(add, cx + 1, hipY, cz - 1, cx + 1, torsoBottom - 1, cz, pants);
+  fillBox(add, cx - 1, 0, cz, cx - 1, hipY - 1, cz, pants);
+  fillBox(add, cx + 1, 1, cz, cx + 1, hipY - 1, cz, pants);
+  add(cx - 1, 0, cz, boot);
+  add(cx + 1, 0, cz, boot);
+}
+
 export function seedVoxelStarter(asset, { hint, force = false } = {}) {
   if (!asset || asset.kind !== 'voxel' || !asset.voxel) {
     return { seeded: false, template: null, voxelCount: 0 };
@@ -121,8 +166,17 @@ export function seedVoxelStarter(asset, { hint, force = false } = {}) {
   }
   if (force) asset.voxel.voxels = [];
 
-  const [sx, sy, sz] = asset.voxel.size;
   const name = String(hint || asset.name || '').toLowerCase();
+  let template = 'block';
+  const isCharacter = /(hero|human|npc|player|character|female|male|person|goblin|knight|avatar|warrior)/.test(name);
+  const isTree = /(tree|plant|bush)/.test(name);
+  const isCrate = /(crate|box|chest|barrel)/.test(name);
+
+  if (isCharacter && (asset.voxel.size[1] < 12 || asset.voxel.size[0] < 8)) {
+    asset.voxel.size = [8, 14, 6];
+  }
+
+  const [sx, sy, sz] = asset.voxel.size;
   const cx = Math.floor(sx / 2);
   const cz = Math.floor(sz / 2);
   const cells = [];
@@ -130,38 +184,13 @@ export function seedVoxelStarter(asset, { hint, force = false } = {}) {
     if (x >= 0 && y >= 0 && z >= 0 && x < sx && y < sy && z < sz) cells.push({ x, y, z, c });
   };
 
-  const skin = '#e8b4a0';
-  const shirt = '#5c9fe0';
-  const pants = '#334466';
   const wood = '#a06828';
   const leaf = '#6fbf6f';
   const crateColor = '#c49a6c';
 
-  let template = 'block';
-  const isCharacter = /(hero|human|npc|player|character|female|male|person|goblin|knight|avatar|warrior)/.test(name);
-  const isTree = /(tree|plant|bush)/.test(name);
-  const isCrate = /(crate|box|chest|barrel)/.test(name);
-
   if (isCharacter) {
     template = 'humanoid';
-    const headH = Math.min(2, sy);
-    const legH = Math.min(2, Math.max(1, Math.floor(sy / 4)));
-    const bodyTop = sy - headH;
-    const bodyBottom = legH;
-    for (let y = bodyTop; y < sy; y++) {
-      for (let dx = -1; dx <= 0; dx++) {
-        for (let dz = -1; dz <= 0; dz++) add(cx + dx, y, cz + dz, skin);
-      }
-    }
-    for (let y = bodyBottom; y < bodyTop; y++) {
-      for (let dx = -1; dx <= 0; dx++) {
-        for (let dz = -1; dz <= 0; dz++) add(cx + dx, y, cz + dz, shirt);
-      }
-    }
-    for (let y = 0; y < legH; y++) {
-      add(cx - 1, y, cz, pants);
-      add(cx, y, cz, pants);
-    }
+    paintHumanoid(add, sx, sy, sz, /female|woman|girl|heroine/.test(name) || !/male|man|boy/.test(name));
   } else if (isTree) {
     template = 'tree';
     const trunkH = Math.min(3, Math.max(2, Math.floor(sy / 2)));

@@ -367,6 +367,14 @@ document.getElementById('btnNewAsset').onclick = () => {
   refreshModeUI();
 };
 
+document.getElementById('btnReseed').onclick = () => {
+  if (current.kind !== 'voxel') return;
+  current.name = document.getElementById('assetName').value.trim() || current.name || 'unnamed';
+  seedVoxelStarter(current, { hint: current.name, force: true });
+  dirty = true;
+  refreshModeUI();
+};
+
 document.getElementById('btnResizeVoxel').onclick = () => {
   const x = +document.getElementById('vx').value;
   const y = +document.getElementById('vy').value;

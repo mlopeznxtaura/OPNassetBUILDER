@@ -16,7 +16,10 @@ test('seedVoxelStarter builds a humanoid from hero name', () => {
   const result = seedVoxelStarter(asset);
   assert.equal(result.seeded, true);
   assert.equal(result.template, 'humanoid');
-  assert.ok(asset.voxel.voxels.length > 8);
+  assert.deepEqual(asset.voxel.size, [8, 14, 6]);
+  const xs = asset.voxel.voxels.map(v => v.x);
+  assert.ok(Math.max(...xs) - Math.min(...xs) >= 4);
+  assert.ok(asset.voxel.voxels.length > 40);
   assert.ok(computeVoxelMeshStats(asset).triangles > 0);
 });
 
