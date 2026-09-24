@@ -10,6 +10,7 @@ import {
   paintSpritePixels,
   paintVoxelCells,
   placementRadius,
+  seedVoxelStarter,
   summarizeAsset,
   testState,
   upsertAsset
@@ -31,7 +32,7 @@ export const TOOLS = [
   },
   {
     name: 'upsert_asset',
-    description: 'Create or replace an asset. Pass a full asset, or name/kind/size/cells for a new voxel.',
+    description: 'Create or replace an asset. Pass a full asset, or name/kind/size/cells for a new voxel. Empty voxels get a name-based starter mesh unless seedStarter is false.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -41,6 +42,7 @@ export const TOOLS = [
         collidable: { type: 'boolean' },
         size: { type: 'array', items: { type: 'number' } },
         cells: { type: 'array' },
+        seedStarter: { type: 'boolean' },
         asset: { type: 'object' }
       }
     }
@@ -55,7 +57,8 @@ export const TOOLS = [
         name: { type: 'string' },
         size: { type: 'array', items: { type: 'number' } },
         collidable: { type: 'boolean' },
-        cells: { type: 'array' }
+        cells: { type: 'array' },
+        seedStarter: { type: 'boolean' }
       },
       required: ['cells']
     }
@@ -153,9 +156,20 @@ export async function callTool(name, args, store) {
     case 'upsert_asset':
       return store.mutate(state => {
         const source = input.asset || input;
-        let asset = source.kind ? source : null;
-        if (!asset || !asset.kind) {
+        let asset;
+        if (source.kind === 'voxel' && source.voxel) asset = structuredClone(source);
+        else if (source.kind === 'sprite' && source.sprite) asset = structuredClone(source);
+        else if (source.kind === 'sprite') {
+          asset = createSpriteAsset({
+            id: source.id,
+            name: source.name,
+            w: source.w,
+            h: source.h,
+            collidable: source.collidable
+          });
+        } else {
           asset = createVoxelAsset({
+            id: source.id,
             name: source.name,
             size: source.size || [6, 6, 6],
             collidable: source.collidable
@@ -168,9 +182,15 @@ export async function callTool(name, args, store) {
         if (!asset.createdAt) asset.createdAt = Date.now();
         const errors = gfValidateAsset(asset);
         if (errors.length) throw new Error(errors.join(', '));
-        if (asset.kind === 'voxel' && Array.isArray(source.cells)) paintVoxelCells(asset, source.cells);
+        if (asset.kind === 'voxel') {
+          if (Array.isArray(source.cells) && source.cells.length) paintVoxelCells(asset, source.cells);
+          else if (source.seedStarter !== false && !asset.voxel.voxels.length) {
+            seedVoxelStarter(asset, { hint: asset.name });
+          }
+        }
         upsertAsset(state.library, asset);
-        return { asset: summarizeAsset(asset), id: asset.id };
+        const summary = summarizeAsset(asset);
+        return { asset: summary, id: asset.id, starter: summary.mesh && summary.mesh.voxelCount ? 'seeded' : null };
       });
     case 'paint_voxels':
       return store.mutate(state => {
@@ -184,8 +204,13 @@ export async function callTool(name, args, store) {
           upsertAsset(state.library, asset);
         }
         if (asset.kind !== 'voxel') throw new Error('asset is not a voxel');
-        const errors = paintVoxelCells(asset, input.cells || []);
-        return { id: asset.id, errors, asset: summarizeAsset(asset) };
+        const cells = input.cells || [];
+        let starter = null;
+        if (cells.length) paintVoxelCells(asset, cells);
+        else if (input.seedStarter !== false && !asset.voxel.voxels.length) {
+          starter = seedVoxelStarter(asset, { hint: input.name || asset.name });
+        }
+        return { id: asset.id, errors: [], asset: summarizeAsset(asset), starter };
       });
     case 'paint_sprite':
       return store.mutate(state => {

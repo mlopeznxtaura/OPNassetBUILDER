@@ -49,6 +49,13 @@ test('collision hits a collidable placement and misses beside it', () => {
   assert.equal(collidesAt(library, level, 10, 10).hit, false);
 });
 
+test('mcp upsert_asset seeds humanoid mesh without cells', async () => {
+  const store = memoryStore();
+  const created = await callTool('upsert_asset', { name: 'female hero', kind: 'voxel', size: [6, 6, 6] }, store);
+  assert.ok(created.asset.voxelCount > 0);
+  assert.ok(created.asset.mesh.triangles > 0);
+});
+
 test('mcp paint_voxels then test_level', async () => {
   const store = memoryStore();
   const listed = await handleMcpMessage({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, store);
