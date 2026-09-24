@@ -44,6 +44,33 @@ function gfBuildVoxelMesh(asset, opts) {
   return group;
 }
 
+function gfAlignObjectToGround(object) {
+  const box = new THREE.Box3().setFromObject(object);
+  if (box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3());
+  object.position.x -= center.x;
+  object.position.z -= center.z;
+  object.position.y -= box.min.y;
+}
+
+function gfLoadCharacterIntoGroup(group, src) {
+  if (!THREE.GLTFLoader) return;
+  group.userData.loadToken = (group.userData.loadToken || 0) + 1;
+  const token = group.userData.loadToken;
+  new THREE.GLTFLoader().load(src, (gltf) => {
+    if (group.userData.loadToken !== token) return;
+    while (group.children.length) group.remove(group.children[0]);
+    gltf.scene.traverse(obj => {
+      if (obj.isMesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+      }
+    });
+    gfAlignObjectToGround(gltf.scene);
+    group.add(gltf.scene);
+  }, undefined, () => {});
+}
+
 function gfBuildSpriteMesh(asset) {
   const { w, h, pixels } = asset.sprite;
   const canvas = document.createElement('canvas');
@@ -77,17 +104,7 @@ function gfBuildAssetMesh(asset) {
     const group = new THREE.Group();
     group.name = asset.name || 'character';
     const src = (asset.character && asset.character.src) || '/assets/female-hero.gltf';
-    if (THREE.GLTFLoader) {
-      new THREE.GLTFLoader().load(src, (gltf) => {
-        gltf.scene.traverse(obj => {
-          if (obj.isMesh) {
-            obj.castShadow = true;
-            obj.receiveShadow = true;
-          }
-        });
-        group.add(gltf.scene);
-      });
-    }
+    gfLoadCharacterIntoGroup(group, src);
     return group;
   }
   throw new Error('unknown asset kind: ' + asset.kind);

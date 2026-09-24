@@ -25,7 +25,9 @@
   button.primary:hover { filter:brightness(1.08); }
   button.danger:hover { background:#4a1f24; border-color:#7a2d34; }
   .row { display:flex; gap:8px; align-items:center; }
-  .asset-item { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid transparent; }
+  .asset-item { display:flex; flex-direction:column; align-items:stretch; gap:2px; padding:6px 8px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid transparent; }
+  .asset-item-row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .asset-item .mesh-src { font-size:10px; color:#6b7280; word-break:break-all; line-height:1.35; }
   .asset-item:hover { background:#20242e; }
   .asset-item.active { border-color:var(--accent); background:#182430; }
   .asset-item .kind-tag { font-size:9px; padding:2px 5px; border-radius:4px; background:#2a2e38; color:#9aa1ad; }
@@ -75,6 +77,7 @@
       <option value="male-hero">Male hero base (skinned)</option>
     </select>
     <div class="hint">Smooth body with a skeleton. Voxel paint does not apply. Orbit to inspect the face, hair, and limbs.</div>
+    <div id="characterMeshInfo" class="hint" style="margin-top:6px">Mesh: —</div>
   </div>
   <div id="voxelSizeCtl">
     <label>Grid size (X × Y × Z)</label>
@@ -126,17 +129,22 @@
   <div id="createHint" class="hint">Create applies the name and grid, seeds a starter mesh when enabled, and updates triangle counts in 3D render stats.</div>
 
   <h2>Scan</h2>
-  <div class="row">
+  <label>Camera</label>
+  <select id="scanCamera" disabled>
+    <option value="">Default camera</option>
+  </select>
+  <div class="row" style="margin-top:8px; flex-wrap:wrap">
     <button id="btnCamera">Start webcam</button>
     <button id="btnCapture" disabled>Capture</button>
     <button id="btnScan360" disabled>Scan 360</button>
+    <button id="btnExportScan" disabled>Export scan ZIP</button>
   </div>
   <div id="scanStage">
     <video id="scanVideo" autoplay playsinline muted></video>
     <canvas id="scanGuide"></canvas>
   </div>
   <img id="scanPreview" alt="Captured scan reference" style="display:none">
-  <div id="scanHint" class="hint">Start the webcam and step back until the body guide turns green. Head, hands, and both feet need to sit inside the outline.</div>
+  <div id="scanHint" class="hint">Start the webcam and step back until the body guide turns green. On Mac, iPhone may appear in the camera list. Windows Phone USB is not a PC webcam — open this page on the phone browser to use its camera.</div>
 
   <h2>3D render stats</h2>
   <div id="meshStats" class="stats-panel">—</div>

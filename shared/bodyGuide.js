@@ -64,6 +64,18 @@ const BONES = [
   [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]
 ];
 
+/** Approximate facing angle from shoulder line (radians, image-normalized x/z). */
+export function bodyYawFromLandmarks(landmarks) {
+  if (!landmarks || landmarks.length < 13) return null;
+  const left = landmarks[NAMES.leftShoulder];
+  const right = landmarks[NAMES.rightShoulder];
+  if (!left || !right) return null;
+  const dx = right.x - left.x;
+  const dz = (right.z || 0) - (left.z || 0);
+  if (Math.abs(dx) < 1e-4 && Math.abs(dz) < 1e-4) return null;
+  return Math.atan2(dz, dx);
+}
+
 export function skeletonSegments(landmarks, width, height) {
   if (!landmarks) return [];
   return BONES.map(([a, b]) => {

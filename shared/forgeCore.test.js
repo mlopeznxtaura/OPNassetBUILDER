@@ -6,11 +6,12 @@ import {
   createCharacterAsset,
   createVoxelAsset,
   gfValidateAsset,
+  isAllowedCharacterSrc,
   memoryStore,
   paintVoxelCells,
   seedVoxelStarter
 } from './forgeCore.js';
-import { bodyFit } from './bodyGuide.js';
+import { bodyFit, bodyYawFromLandmarks } from './bodyGuide.js';
 import { callTool, handleMcpMessage } from './mcpTools.js';
 
 test('body guide is ready only when the whole body is inside the frame', () => {
@@ -24,6 +25,13 @@ test('body guide is ready only when the whole body is inside the frame', () => {
   assert.equal(bodyFit(framed).ready, false);
 });
 
+test('body yaw can be estimated from shoulders', () => {
+  const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+  landmarks[11] = { x: 0.4, y: 0.3, z: 0.1 };
+  landmarks[12] = { x: 0.6, y: 0.3, z: -0.1 };
+  assert.ok(typeof bodyYawFromLandmarks(landmarks) === 'number');
+});
+
 test('character asset is a skinned mesh with bone and triangle counts', () => {
   const asset = createCharacterAsset({ name: 'female hero' });
   assert.deepEqual(gfValidateAsset(asset), []);
@@ -31,6 +39,28 @@ test('character asset is a skinned mesh with bone and triangle counts', () => {
   assert.ok(asset.character.stats.triangles > 1000);
   assert.ok(asset.character.stats.bones >= 15);
   assert.ok(asset.character.stats.materials >= 4);
+});
+
+test('character.src must be same-origin under /assets/', () => {
+  assert.equal(isAllowedCharacterSrc('/assets/hero.glb'), true);
+  assert.equal(isAllowedCharacterSrc('https://evil.com/x.glb'), false);
+  assert.equal(isAllowedCharacterSrc('/assets/../etc/passwd'), false);
+  const custom = createCharacterAsset({ name: 'rig', src: '/assets/custom.glb' });
+  assert.equal(custom.character.src, '/assets/custom.glb');
+  assert.equal(custom.character.model, 'custom');
+  const bad = createCharacterAsset({ name: 'rig', src: 'http://x/a.glb' });
+  assert.equal(bad.character.src, '/assets/female-hero.gltf');
+});
+
+test('mcp upsert_asset accepts character src override', async () => {
+  const store = memoryStore();
+  const created = await callTool('upsert_asset', {
+    name: 'belize rig',
+    kind: 'character',
+    model: 'male-hero',
+    src: '/assets/male-belizean.glb'
+  }, store);
+  assert.equal(created.asset.characterSrc, '/assets/male-belizean.glb');
 });
 
 test('seedVoxelStarter builds a humanoid from hero name', () => {

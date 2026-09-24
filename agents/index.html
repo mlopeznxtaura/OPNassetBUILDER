@@ -48,7 +48,8 @@
   <ul>
     <li><strong>voxel</strong> — grid of colored cubes; <code>paint_voxels</code> or <code>upsert_asset</code> with <code>cells</code>. Optional <code>seedStarter</code> for name-based starter mesh.</li>
     <li><strong>sprite</strong> — 2D pixel grid; <code>paint_sprite</code>.</li>
-    <li><strong>character</strong> — skinned glTF base (<code>female-hero</code>, <code>male-hero</code>); <code>upsert_asset { kind:"character", model:"male-hero" }</code>.</li>
+    <li><strong>character</strong> — skinned glTF (<code>female-hero</code>, <code>male-hero</code>) or hosted <code>character.src</code> under <code>/assets/*.gltf|.glb</code>. UI shows the bound mesh URL; catalog name ≠ custom file unless <code>src</code> is set.</li>
+    <li><strong>scan</strong> — optional reference photo on any asset; Scan 360 captures multiple frames locally; save stores <code>frameCount</code> + thumbnail, not full frame arrays in API state.</li>
   </ul>
 
   <h2>REST</h2>

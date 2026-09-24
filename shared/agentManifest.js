@@ -58,7 +58,11 @@ export function buildAgentManifest(url) {
           'female-hero': base + '/assets/female-hero.gltf',
           'male-hero': base + '/assets/male-hero.gltf'
         },
-        agent_notes: 'upsert_asset with kind:"character" and optional model:"male-hero"|"female-hero". Names containing male/man pick male-hero in the UI.'
+        agent_notes: 'Catalog model (female-hero|male-hero) is a preset pointer — it does not rename the mesh file. Use character.src (same-origin /assets/*.gltf|.glb) when a custom rigged file is deployed. UI and list_assets show characterSrc so agents can verify binding. list_assets/get_asset do not include full scan JPEGs; scan may include frameCount only.'
+      },
+      scan: {
+        fields: 'scan?:{ image (data URL ref), capturedAt, width, height, frameCount }',
+        agent_notes: 'Stage 1 Scan 360 captures multiple frames in-browser; Save persists reference image + frameCount (not every frame in Durable Object). Humans export scan ZIP (frames + manifest.json) for external photogrammetry.'
       }
     },
     mcp: {
@@ -125,6 +129,7 @@ export function buildAgentTxt(url) {
     '',
     'Example: upsert_asset {"name":"crate","kind":"voxel","size":[6,6,6],"seedStarter":true}',
     'Example: upsert_asset {"name":"male hero","kind":"character","model":"male-hero"}',
+    'Example: upsert_asset {"name":"custom rig","kind":"character","model":"female-hero","src":"/assets/my-hero.glb"}',
     'Example: paint_voxels {"name":"crate","cells":[{"x":0,"y":0,"z":0,"c":"#e05252"}]}',
     'Example: place {"name":"crate","x":2,"z":3}',
     'Example: test_level {"probes":[{"x":0,"z":0}]}'

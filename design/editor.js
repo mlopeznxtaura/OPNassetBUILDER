@@ -1,5 +1,6 @@
 import { createLiveClient } from '../shared/liveClient.js';
-import { bodyFit, guidePolylines, skeletonSegments } from '../shared/bodyGuide.js';
+import { bodyFit, bodyYawFromLandmarks, guidePolylines, skeletonSegments } from '../shared/bodyGuide.js';
+import { captureJpegFromVideo, downloadScanZip, pickBestScanFrame } from '../shared/scanCapture.js';
 import {
   computeVoxelMeshStats,
   createCharacterAsset,
@@ -72,24 +73,47 @@ function setStatus(text) {
 function markDirty() { dirty = true; }
 
 let viewStats = null;
+let characterLoadError = '';
+
+function updateCharacterMeshInfo() {
+  const el = document.getElementById('characterMeshInfo');
+  if (!el) return;
+  if (current.kind !== 'character') {
+    el.textContent = '';
+    return;
+  }
+  const src = (current.character && current.character.src) || '—';
+  const preset = (current.character && current.character.model) || '—';
+  const err = characterLoadError ? ' · load error' : '';
+  el.textContent = 'Preset: ' + preset + ' · Mesh: ' + src + err;
+}
 
 function formatMeshStats(asset) {
   if (asset && asset.kind === 'character') {
     const mesh = viewStats || (asset.character && asset.character.stats) || {};
-    const pending = !viewStats;
+    const pending = !viewStats && !characterLoadError;
+    const src = (asset.character && asset.character.src) || '—';
+    const lines = [
+      'Mesh ' + src + ' · preset ' + (asset.character.model || 'character')
+    ];
+    if (characterLoadError) lines.push(characterLoadError);
+    else if (pending) lines.push('Loading skinned mesh…');
+    else {
+      lines.push((mesh.vertices || 0).toLocaleString() + ' vertices');
+      lines.push((mesh.triangles || 0).toLocaleString() + ' triangles · ' + (mesh.materials || 0) + ' materials · ' + (mesh.bones || 0) + ' bones');
+    }
+    if (asset.scan && asset.scan.frameCount) {
+      lines.push('Scan reference · ' + asset.scan.frameCount + ' frames captured (ZIP export on device)');
+    }
     return {
-      lines: [
-        pending ? 'Loading skinned mesh…' : `<strong>${(mesh.vertices || 0).toLocaleString()}</strong> vertices`,
-        `<strong>${(mesh.triangles || 0).toLocaleString()}</strong> triangles · <strong>${mesh.materials || 0}</strong> materials`,
-        `<strong>${mesh.bones || 0}</strong> bones · ${asset.character.model || 'character'}`
-      ],
-      toolbar: pending ? 'Loading character…' : `${(mesh.triangles || 0).toLocaleString()} tris · ${mesh.bones || 0} bones`
+      lines,
+      toolbar: characterLoadError ? 'Mesh load failed' : pending ? 'Loading character…' : `${(mesh.triangles || 0).toLocaleString()} tris · ${mesh.bones || 0} bones`
     };
   }
   if (!asset || asset.kind !== 'voxel') {
     if (asset && asset.kind === 'sprite') {
       const opaque = asset.sprite.pixels.filter(Boolean).length;
-      return { lines: [`<strong>${opaque}</strong> painted pixels`, `${asset.sprite.w}×${asset.sprite.h} sprite`], toolbar: `${opaque} px · ${asset.sprite.w}×${asset.sprite.h}` };
+      return { lines: [opaque + ' painted pixels', asset.sprite.w + '×' + asset.sprite.h + ' sprite'], toolbar: `${opaque} px · ${asset.sprite.w}×${asset.sprite.h}` };
     }
     return { lines: ['No mesh yet'], toolbar: '' };
   }
@@ -98,18 +122,18 @@ function formatMeshStats(asset) {
   if (!mesh.voxelCount) {
     return {
       lines: [
-        `<strong>0</strong> solid voxels`,
-        `Grid <strong>${gx}×${gy}×${gz}</strong> (wireframe shown)`,
-        '<span class="muted">Enable starter mesh or paint voxels / call <code>upsert_asset</code> or <code>paint_voxels</code>.</span>'
+        '0 solid voxels',
+        'Grid ' + gx + '×' + gy + '×' + gz + ' (wireframe shown)',
+        'Enable starter mesh or paint voxels / upsert_asset or paint_voxels.'
       ],
       toolbar: `0 voxels · grid ${gx}×${gy}×${gz}`
     };
   }
   return {
     lines: [
-      `<strong>${mesh.voxelCount}</strong> solid voxels`,
-      `<strong>${mesh.triangles.toLocaleString()}</strong> triangles · <strong>${mesh.vertices.toLocaleString()}</strong> quad corners`,
-      `<strong>${mesh.faces.toLocaleString()}</strong> exposed faces · grid ${gx}×${gy}×${gz}`
+      mesh.voxelCount + ' solid voxels',
+      mesh.triangles.toLocaleString() + ' triangles · ' + mesh.vertices.toLocaleString() + ' quad corners',
+      mesh.faces.toLocaleString() + ' exposed faces · grid ' + gx + '×' + gy + '×' + gz
     ],
     toolbar: `${mesh.voxelCount} voxels · ${mesh.triangles.toLocaleString()} tris`
   };
@@ -118,8 +142,14 @@ function formatMeshStats(asset) {
 function updateMeshStatsUI() {
   const { lines, toolbar } = formatMeshStats(current);
   const panel = document.getElementById('meshStats');
-  panel.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+  panel.replaceChildren();
+  lines.forEach(l => {
+    const row = document.createElement('div');
+    row.textContent = l;
+    panel.appendChild(row);
+  });
   document.getElementById('toolbarStats').textContent = toolbar;
+  updateCharacterMeshInfo();
 }
 
 const viewport = document.getElementById('viewport');
@@ -349,10 +379,12 @@ function rebuildCharacterPreview() {
   const group = new THREE.Group();
   setPreview(group);
   viewStats = null;
+  characterLoadError = '';
   updateMeshStatsUI();
   clearGroup(voxelHelperGroup);
   const src = (current.character && current.character.src) || '/assets/female-hero.gltf';
   if (!THREE.GLTFLoader) {
+    characterLoadError = 'GLTFLoader unavailable';
     viewStats = { vertices: 0, triangles: 0, materials: 0, bones: 0 };
     updateMeshStatsUI();
     return;
@@ -365,6 +397,7 @@ function rebuildCharacterPreview() {
         obj.receiveShadow = true;
       }
     });
+    if (typeof gfAlignObjectToGround === 'function') gfAlignObjectToGround(gltf.scene);
     group.add(gltf.scene);
     viewStats = inspectCharacter(gltf.scene);
     controls.target.set(0, 0.95, 0);
@@ -372,7 +405,8 @@ function rebuildCharacterPreview() {
     updateMeshStatsUI();
   }, undefined, () => {
     if (token !== characterToken) return;
-    viewStats = current.character.stats;
+    characterLoadError = 'Could not load ' + src;
+    viewStats = current.character && current.character.stats ? current.character.stats : null;
     updateMeshStatsUI();
   });
 }
@@ -524,12 +558,21 @@ function refreshLibraryList() {
   lib.assets.forEach(a => {
     const item = document.createElement('div');
     item.className = 'asset-item' + (a.id === selectedLibId ? ' active' : '');
+    const row = document.createElement('div');
+    row.className = 'asset-item-row';
     const name = document.createElement('span');
     name.textContent = a.name || '(unnamed)';
     const kind = document.createElement('span');
     kind.className = 'kind-tag';
     kind.textContent = a.kind;
-    item.append(name, kind);
+    row.append(name, kind);
+    item.appendChild(row);
+    if (a.kind === 'character' && a.character && a.character.src) {
+      const sub = document.createElement('div');
+      sub.className = 'mesh-src';
+      sub.textContent = a.character.src;
+      item.appendChild(sub);
+    }
     item.onclick = () => loadAsset(a);
     el.appendChild(item);
   });
@@ -546,6 +589,12 @@ let scanStream = null;
 let poseLoop = 0;
 let poseBusy = false;
 let bodyReady = false;
+let lastPoseLandmarks = null;
+let scan360Timer = null;
+let scan360CaptureTimer = null;
+/** @type {{ frames: object[], active: boolean }} */
+const scanSession = { frames: [], active: false };
+const SCAN_DEVICE_KEY = 'opn_scan_camera_device';
 const scanVideo = document.getElementById('scanVideo');
 const scanPreview = document.getElementById('scanPreview');
 const scanStage = document.getElementById('scanStage');
@@ -596,8 +645,92 @@ function ensurePose() {
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
   });
-  poseDetector.onResults((results) => paintGuide(results.poseLandmarks || null));
+  poseDetector.onResults((results) => {
+    lastPoseLandmarks = results.poseLandmarks || null;
+    paintGuide(lastPoseLandmarks);
+  });
   return poseDetector;
+}
+
+function stopScan360Timers() {
+  if (scan360Timer) {
+    clearInterval(scan360Timer);
+    scan360Timer = null;
+  }
+  if (scan360CaptureTimer) {
+    clearInterval(scan360CaptureTimer);
+    scan360CaptureTimer = null;
+  }
+  scanSession.active = false;
+  document.getElementById('btnScan360').disabled = !bodyReady;
+}
+
+function updateExportScanButton() {
+  const btn = document.getElementById('btnExportScan');
+  if (!btn) return;
+  btn.disabled = scanSession.frames.length === 0;
+}
+
+function applyScanSessionToAsset() {
+  if (!scanSession.frames.length) return;
+  const best = pickBestScanFrame(scanSession.frames);
+  if (!best) return;
+  current.scan = {
+    image: best.image,
+    capturedAt: best.capturedAt || Date.now(),
+    width: best.width,
+    height: best.height,
+    frameCount: scanSession.frames.filter(f => f.valid !== false).length
+  };
+  showScanStill(current.scan.image);
+  markDirty();
+  updateMeshStatsUI();
+}
+
+async function refreshCameraDeviceList() {
+  const select = document.getElementById('scanCamera');
+  if (!select || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const videos = devices.filter(d => d.kind === 'videoinput');
+  const saved = sessionStorage.getItem(SCAN_DEVICE_KEY) || '';
+  select.replaceChildren();
+  const def = document.createElement('option');
+  def.value = '';
+  def.textContent = videos.length ? 'Default camera' : 'No camera found';
+  select.appendChild(def);
+  videos.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value = d.deviceId;
+    opt.textContent = d.label || ('Camera ' + (i + 1));
+    select.appendChild(opt);
+  });
+  select.disabled = !videos.length;
+  if (saved && videos.some(d => d.deviceId === saved)) select.value = saved;
+}
+
+function videoConstraints() {
+  const select = document.getElementById('scanCamera');
+  const deviceId = select && select.value;
+  const video = deviceId
+    ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } };
+  return { audio: false, video };
+}
+
+async function startScanStream() {
+  const hint = document.getElementById('scanHint');
+  scanStream = await navigator.mediaDevices.getUserMedia(videoConstraints());
+  scanVideo.srcObject = scanStream;
+  scanStage.classList.add('live');
+  document.getElementById('btnCamera').textContent = 'Stop webcam';
+  document.getElementById('btnCapture').disabled = false;
+  await refreshCameraDeviceList();
+  hint.textContent = 'Finding your body. Step back until the guide turns green.';
+  const tick = () => {
+    trackBody();
+    poseLoop = requestAnimationFrame(tick);
+  };
+  poseLoop = requestAnimationFrame(tick);
 }
 
 async function trackBody() {
@@ -632,6 +765,7 @@ document.getElementById('btnCamera').onclick = async () => {
   const button = document.getElementById('btnCamera');
   const hint = document.getElementById('scanHint');
   if (scanStream) {
+    stopScan360Timers();
     scanStream.getTracks().forEach(track => track.stop());
     scanStream = null;
     scanVideo.srcObject = null;
@@ -642,7 +776,9 @@ document.getElementById('btnCamera').onclick = async () => {
     button.textContent = 'Start webcam';
     document.getElementById('btnCapture').disabled = true;
     document.getElementById('btnScan360').disabled = true;
+    document.getElementById('scanCamera').disabled = true;
     bodyReady = false;
+    lastPoseLandmarks = null;
     return;
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -650,39 +786,89 @@ document.getElementById('btnCamera').onclick = async () => {
     return;
   }
   try {
-    scanStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    scanVideo.srcObject = scanStream;
-    scanStage.classList.add('live');
-    button.textContent = 'Stop webcam';
-    document.getElementById('btnCapture').disabled = false;
-    hint.textContent = 'Finding your body. Step back until the guide turns green.';
-    const tick = () => {
-      trackBody();
-      poseLoop = requestAnimationFrame(tick);
-    };
-    poseLoop = requestAnimationFrame(tick);
+    await startScanStream();
   } catch (err) {
     hint.textContent = 'Camera permission was blocked. Allow the camera for this site and try again. ' + (err && err.message ? err.message : '');
   }
 };
 
-document.getElementById('btnScan360').onclick = () => {
-  if (!bodyReady) return;
+document.getElementById('scanCamera').onchange = async () => {
+  const select = document.getElementById('scanCamera');
+  if (!select || !scanStream) return;
+  sessionStorage.setItem(SCAN_DEVICE_KEY, select.value || '');
   const hint = document.getElementById('scanHint');
+  stopScan360Timers();
+  scanStream.getTracks().forEach(track => track.stop());
+  scanStream = null;
+  cancelAnimationFrame(poseLoop);
+  poseLoop = 0;
+  try {
+    await startScanStream();
+  } catch (err) {
+    hint.textContent = 'Could not switch camera. ' + (err && err.message ? err.message : '');
+  }
+};
+
+document.getElementById('btnScan360').onclick = () => {
+  if (!bodyReady || !scanStream || scanSession.active) return;
+  const hint = document.getElementById('scanHint');
+  const btn = document.getElementById('btnScan360');
+  scanSession.frames = [];
+  scanSession.active = true;
+  updateExportScanButton();
+  btn.disabled = true;
   let left = 12;
+  const targetFrames = 16;
+  const captureFrame = () => {
+    if (!scanStream || !scanSession.active) return;
+    const ready = bodyReady;
+    const shot = captureJpegFromVideo(scanVideo);
+    if (!shot) return;
+    const yaw = bodyYawFromLandmarks(lastPoseLandmarks);
+    scanSession.frames.push({
+      ...shot,
+      t: Date.now(),
+      yaw,
+      valid: ready
+    });
+    const validCount = scanSession.frames.filter(f => f.valid !== false).length;
+    hint.textContent = 'Turn slowly. Frames ' + validCount + '/' + targetFrames + ' · ' + left + 's left' + (ready ? '' : ' (paused — stay in guide)');
+    updateExportScanButton();
+  };
+  captureFrame();
+  scan360CaptureTimer = setInterval(captureFrame, 750);
   hint.textContent = 'Turn slowly through one full circle. Stay inside the green guide. ' + left + 's';
-  const timer = setInterval(() => {
+  scan360Timer = setInterval(() => {
     left -= 1;
     if (!scanStream || left <= 0) {
-      clearInterval(timer);
-      if (scanStream) hint.textContent = bodyReady ? 'Circle done. The guide held your whole body. Mesh build from these frames is the next step.' : 'Circle ended outside the guide. Step back and try again.';
+      stopScan360Timers();
+      const validCount = scanSession.frames.filter(f => f.valid !== false).length;
+      if (scanStream) {
+        if (validCount >= 4) {
+          applyScanSessionToAsset();
+          hint.textContent = 'Captured ' + validCount + ' frames. Save stores a reference image + count. Export scan ZIP for photogrammetry tools.';
+        } else {
+          hint.textContent = 'Only ' + validCount + ' good frames. Step back, stay green, and try Scan 360 again.';
+        }
+      }
+      document.getElementById('btnScan360').disabled = !bodyReady;
+      updateExportScanButton();
       return;
     }
-    hint.textContent = 'Turn slowly. Stay green. ' + left + 's';
+    const validCount = scanSession.frames.filter(f => f.valid !== false).length;
+    hint.textContent = 'Turn slowly. Frames ' + validCount + '/' + targetFrames + ' · ' + left + 's';
   }, 1000);
+};
+
+document.getElementById('btnExportScan').onclick = async () => {
+  if (!scanSession.frames.length) return;
+  const name = document.getElementById('assetName').value.trim() || current.name || 'scan';
+  try {
+    await downloadScanZip(name, scanSession.frames);
+    document.getElementById('scanHint').textContent = 'Downloaded ZIP with ' + scanSession.frames.length + ' frames + manifest.json.';
+  } catch (err) {
+    document.getElementById('scanHint').textContent = 'ZIP export failed. ' + (err && err.message ? err.message : '');
+  }
 };
 
 document.getElementById('btnCapture').onclick = () => {
@@ -698,9 +884,17 @@ document.getElementById('btnCapture').onclick = () => {
   document.getElementById('scanHint').textContent = 'Captured ' + canvas.width + '×' + canvas.height + '. Save to library keeps this reference on the asset.';
 };
 
+function scanForPersistence(scan) {
+  if (!scan || typeof scan !== 'object') return scan;
+  const { image, capturedAt, width, height, frameCount } = scan;
+  if (!image) return undefined;
+  return { image, capturedAt, width, height, frameCount: frameCount || 0 };
+}
+
 document.getElementById('btnSave').onclick = async () => {
   current.name = document.getElementById('assetName').value.trim() || 'unnamed';
   current.collidable = document.getElementById('assetCollidable').checked;
+  if (current.scan) current.scan = scanForPersistence(current.scan);
   const errs = gfValidateAsset(current);
   if (errs.length) { alert('Cannot save: ' + errs.join(', ')); return; }
   try {

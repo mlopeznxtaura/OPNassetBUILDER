@@ -8,6 +8,7 @@ import {
   findAsset,
   gfNewId,
   gfValidateAsset,
+  isAllowedCharacterSrc,
   paintSpritePixels,
   paintVoxelCells,
   placementRadius,
@@ -33,7 +34,7 @@ export const TOOLS = [
   },
   {
     name: 'upsert_asset',
-    description: 'Create or replace an asset. kind: voxel|sprite|character. Voxel: name,size,cells,seedStarter (auto humanoid/tree/crate if empty). Character: model female-hero|male-hero. Or pass full asset object.',
+    description: 'Create or replace an asset. kind: voxel|sprite|character. Voxel: name,size,cells,seedStarter (auto humanoid/tree/crate if empty). Character: model female-hero|male-hero, or character.src /assets/*.gltf|.glb. Or pass full asset object.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -41,6 +42,7 @@ export const TOOLS = [
         name: { type: 'string' },
         kind: { type: 'string', enum: ['voxel', 'sprite', 'character'] },
         model: { type: 'string' },
+        src: { type: 'string', description: 'Same-origin character mesh URL under /assets/' },
         collidable: { type: 'boolean' },
         size: { type: 'array', items: { type: 'number' } },
         cells: { type: 'array' },
@@ -163,12 +165,20 @@ export async function callTool(name, args, store) {
         else if (source.kind === 'sprite' && source.sprite) asset = structuredClone(source);
         else if (source.kind === 'character' && source.character) asset = structuredClone(source);
         else if (source.kind === 'character') {
+          const customSrc = (source.character && source.character.src) || source.src;
+          if (customSrc && !isAllowedCharacterSrc(customSrc)) {
+            throw new Error('character.src must be same-origin /assets/*.gltf or .glb');
+          }
           asset = createCharacterAsset({
             id: source.id,
             name: source.name,
             model: source.model,
+            src: customSrc,
             collidable: source.collidable
           });
+          if (source.character && source.character.stats) {
+            asset.character.stats = { ...asset.character.stats, ...source.character.stats };
+          }
         } else if (source.kind === 'sprite') {
           asset = createSpriteAsset({
             id: source.id,

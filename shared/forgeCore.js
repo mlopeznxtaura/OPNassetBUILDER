@@ -22,6 +22,12 @@ function clampInt(n, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+export function isAllowedCharacterSrc(src) {
+  if (typeof src !== 'string' || !src.startsWith('/assets/')) return false;
+  if (src.includes('..') || src.includes('//')) return false;
+  return /\.(gltf|glb)$/i.test(src);
+}
+
 export function gfValidateAsset(asset) {
   const errors = [];
   if (!asset || typeof asset !== 'object') return ['asset must be an object'];
@@ -33,7 +39,10 @@ export function gfValidateAsset(asset) {
     else if (!Array.isArray(asset.voxel.size) || asset.voxel.size.length !== 3) errors.push('voxel size missing');
   }
   if (asset.kind === 'sprite' && (!asset.sprite || !Array.isArray(asset.sprite.pixels))) errors.push('sprite data missing');
-  if (asset.kind === 'character' && (!asset.character || !asset.character.src)) errors.push('character mesh missing');
+  if (asset.kind === 'character') {
+    if (!asset.character || !asset.character.src) errors.push('character mesh missing');
+    else if (!isAllowedCharacterSrc(asset.character.src)) errors.push('character.src must be /assets/*.gltf or .glb');
+  }
   return errors;
 }
 
@@ -52,14 +61,16 @@ export function createVoxelAsset({ id, name, size = [6, 6, 6], collidable = true
   };
 }
 
-export function createCharacterAsset({ id, name, model = 'female-hero', collidable = true } = {}) {
+export function createCharacterAsset({ id, name, model = 'female-hero', src, collidable = true } = {}) {
   const spec = characterModel(model);
+  const resolvedSrc = src && isAllowedCharacterSrc(src) ? src : spec.src;
+  const catalogModel = src && isAllowedCharacterSrc(src) && resolvedSrc !== spec.src ? 'custom' : spec.id;
   return {
     id: id || gfNewId(),
     name: name || spec.label,
     kind: 'character',
     collidable: collidable !== false,
-    character: { model: spec.id, src: spec.src, stats: spec.stats },
+    character: { model: catalogModel, src: resolvedSrc, stats: { ...spec.stats } },
     createdAt: Date.now()
   };
 }
@@ -308,12 +319,17 @@ export function summarizeAsset(asset) {
   if (!asset) return null;
   if (asset.kind === 'character') {
     const stats = (asset.character && asset.character.stats) || {};
+    const scan = asset.scan
+      ? { frameCount: asset.scan.frameCount || 0, capturedAt: asset.scan.capturedAt || null }
+      : null;
     return {
       id: asset.id,
       name: asset.name,
       kind: asset.kind,
       collidable: !!asset.collidable,
       model: asset.character && asset.character.model,
+      characterSrc: asset.character && asset.character.src,
+      scan,
       mesh: {
         vertices: stats.vertices || 0,
         triangles: stats.triangles || 0,
