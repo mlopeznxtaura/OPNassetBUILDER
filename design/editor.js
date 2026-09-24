@@ -1,6 +1,7 @@
 import { createLiveClient } from '../shared/liveClient.js';
 import { bodyFit, bodyYawFromLandmarks, guidePolylines, skeletonSegments } from '../shared/bodyGuide.js';
-import { captureJpegFromVideo, downloadScanZip, pickBestScanFrame } from '../shared/scanCapture.js';
+import { captureJpegFromVideo, componentFromVideo, assignOrbitAngles, downloadScanZip, pickBestScanFrame, startScanRecorder } from '../shared/scanCapture.js';
+import { visualHull } from '../shared/visualHull.js';
 import {
   computeVoxelMeshStats,
   createCharacterAsset,
@@ -590,10 +591,12 @@ let poseLoop = 0;
 let poseBusy = false;
 let bodyReady = false;
 let lastPoseLandmarks = null;
+let lastSegmentation = null;
+let scanDecodeBusy = false;
 let scan360Timer = null;
 let scan360CaptureTimer = null;
 /** @type {{ frames: object[], active: boolean }} */
-const scanSession = { frames: [], active: false };
+const scanSession = { frames: [], components: [], active: false, recorder: null, videoBlob: null };
 const SCAN_DEVICE_KEY = 'opn_scan_camera_device';
 const scanVideo = document.getElementById('scanVideo');
 const scanPreview = document.getElementById('scanPreview');
@@ -641,6 +644,7 @@ function paintGuide(landmarks) {
 }
 
 let poseDetector = null;
+let poseWait = null;
 function ensurePose() {
   if (poseDetector || !window.Pose) return poseDetector;
   poseDetector = new window.Pose({
@@ -649,13 +653,19 @@ function ensurePose() {
   poseDetector.setOptions({
     modelComplexity: 1,
     smoothLandmarks: true,
-    enableSegmentation: false,
+    enableSegmentation: true,
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
   });
   poseDetector.onResults((results) => {
     lastPoseLandmarks = results.poseLandmarks || null;
+    lastSegmentation = results.segmentationMask || null;
     paintGuide(lastPoseLandmarks);
+    if (poseWait) {
+      const resolve = poseWait;
+      poseWait = null;
+      resolve(results);
+    }
   });
   return poseDetector;
 }
@@ -676,7 +686,9 @@ function stopScan360Timers() {
 function updateExportScanButton() {
   const btn = document.getElementById('btnExportScan');
   if (!btn) return;
-  btn.disabled = scanSession.frames.length === 0;
+  btn.disabled = scanSession.frames.length === 0 && !scanSession.videoBlob;
+  const bake = document.getElementById('btnBakeScan');
+  if (bake) bake.disabled = scanSession.components.length < 3 && scanSession.frames.length < 3 && !scanSession.videoBlob;
 }
 
 function applyScanSessionToAsset() {
@@ -743,8 +755,91 @@ async function startScanStream() {
   poseLoop = requestAnimationFrame(tick);
 }
 
+function sendPose(pose, image) {
+  return new Promise((resolve, reject) => {
+    poseWait = resolve;
+    pose.send({ image }).catch((err) => {
+      poseWait = null;
+      reject(err);
+    });
+  });
+}
+
+async function decodeVideoToComponents(blob) {
+  const pose = ensurePose();
+  if (!pose || !blob || !blob.size) return [];
+  const url = URL.createObjectURL(blob);
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.src = url;
+  try {
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error('Could not read the scan video'));
+    });
+    const duration = video.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return [];
+    const frames = [];
+    const step = Math.max(0.45, duration / 16);
+    for (let t = 0; t < duration - 0.05 && frames.length < 18; t += step) {
+      video.currentTime = t;
+      await new Promise((resolve) => { video.onseeked = () => resolve(); });
+      const results = await sendPose(pose, video);
+      const comp = componentFromVideo(video, results.segmentationMask, results.poseLandmarks, 160);
+      if (!comp) continue;
+      const fit = bodyFit(results.poseLandmarks);
+      frames.push({
+        ...comp,
+        t: Math.round(t * 1000),
+        capturedAt: Date.now(),
+        yaw: bodyYawFromLandmarks(results.poseLandmarks),
+        valid: fit.ready
+      });
+    }
+    return frames;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function bakeHullIntoAsset(components) {
+  const withMask = components.filter(frame => frame.mask && frame.mask.some(v => v > 128));
+  const ready = withMask.filter(frame => frame.valid !== false);
+  const source = ready.length >= 3 ? ready : withMask;
+  if (source.length < 3) return null;
+  const hull = visualHull(assignOrbitAngles(source), { size: [16, 32, 16] });
+  if (!hull.voxels.length) return null;
+  const baseName = document.getElementById('assetName').value.trim() || current.name || 'scan';
+  const asset = createVoxelAsset({ name: baseName.replace(/ scan$/, '') + ' scan', size: hull.size, collidable: true });
+  asset.voxel.voxels = hull.voxels;
+  asset.voxel.cellSize = 1.85 / hull.size[1];
+  const best = pickBestScanFrame(scanSession.frames);
+  if (best && best.image) {
+    asset.scan = {
+      image: best.image,
+      capturedAt: best.capturedAt || Date.now(),
+      width: best.width,
+      height: best.height,
+      frameCount: source.length,
+      hullVoxels: hull.voxels.length
+    };
+  }
+  return asset;
+}
+
+function showBakedAsset(asset) {
+  current = asset;
+  selectedLibId = null;
+  document.getElementById('assetName').value = asset.name;
+  document.getElementById('assetKind').value = 'voxel';
+  dirty = true;
+  refreshModeUI();
+  showScanStill(asset.scan && asset.scan.image);
+}
+
 async function trackBody() {
-  if (!scanStream || poseBusy) return;
+  if (scanDecodeBusy || !scanStream || poseBusy) return;
   if (!scanVideo.videoWidth) return;
   const pose = ensurePose();
   if (!pose) {
@@ -777,6 +872,10 @@ document.getElementById('btnCamera').onclick = async () => {
   const button = document.getElementById('btnCamera');
   const hint = document.getElementById('scanHint');
   if (scanStream) {
+    if (scanSession.recorder) {
+      scanSession.recorder.stop().catch(() => {});
+      scanSession.recorder = null;
+    }
     stopScan360Timers();
     scanStream.getTracks().forEach(track => track.stop());
     scanStream = null;
@@ -827,6 +926,9 @@ document.getElementById('btnScan360').onclick = () => {
   const hint = document.getElementById('scanHint');
   const btn = document.getElementById('btnScan360');
   scanSession.frames = [];
+  scanSession.components = [];
+  scanSession.videoBlob = null;
+  scanSession.recorder = startScanRecorder(scanStream);
   scanSession.active = true;
   updateExportScanButton();
   btn.disabled = true;
@@ -838,12 +940,23 @@ document.getElementById('btnScan360').onclick = () => {
     const shot = captureJpegFromVideo(scanVideo);
     if (!shot) return;
     const yaw = bodyYawFromLandmarks(lastPoseLandmarks);
+    const comp = componentFromVideo(scanVideo, lastSegmentation, lastPoseLandmarks, 160);
     scanSession.frames.push({
       ...shot,
       t: Date.now(),
       yaw,
       valid: ready
     });
+    if (comp) {
+      scanSession.components.push({
+        ...comp,
+        t: Date.now(),
+        capturedAt: shot.capturedAt,
+        yaw,
+        valid: ready,
+        image: shot.image
+      });
+    }
     const validCount = scanSession.frames.filter(f => f.valid !== false).length;
     hint.textContent = 'Turn slowly. Frames ' + validCount + '/' + targetFrames + ' · ' + left + 's left' + (ready ? '' : ' (paused — stay in guide)');
     updateExportScanButton();
@@ -854,18 +967,10 @@ document.getElementById('btnScan360').onclick = () => {
   scan360Timer = setInterval(() => {
     left -= 1;
     if (!scanStream || left <= 0) {
+      const recorder = scanSession.recorder;
+      scanSession.recorder = null;
       stopScan360Timers();
-      const validCount = scanSession.frames.filter(f => f.valid !== false).length;
-      if (scanStream) {
-        if (validCount >= 4) {
-          applyScanSessionToAsset();
-          hint.textContent = 'Captured ' + validCount + ' frames. Save stores a reference image + count. Export scan ZIP for photogrammetry tools.';
-        } else {
-          hint.textContent = 'Only ' + validCount + ' good frames. Step back, stay green, and try Scan 360 again.';
-        }
-      }
-      document.getElementById('btnScan360').disabled = !bodyReady;
-      updateExportScanButton();
+      finishScanRecording(recorder);
       return;
     }
     const validCount = scanSession.frames.filter(f => f.valid !== false).length;
@@ -873,12 +978,59 @@ document.getElementById('btnScan360').onclick = () => {
   }, 1000);
 };
 
+async function finishScanRecording(recorder) {
+  const hint = document.getElementById('scanHint');
+  scanDecodeBusy = true;
+  try {
+    if (recorder) {
+      hint.textContent = 'Stopping video…';
+      scanSession.videoBlob = await recorder.stop();
+    }
+    let components = scanSession.components.slice();
+    if (scanSession.videoBlob && scanSession.videoBlob.size > 800) {
+      hint.textContent = 'Decoding video into silhouette frames…';
+      try {
+        const decoded = await decodeVideoToComponents(scanSession.videoBlob);
+        if (decoded.filter(frame => frame.mask && frame.mask.some(v => v > 128)).length >= 3) components = decoded;
+      } catch (err) {
+        hint.textContent = 'Video decode failed, using live frames. ' + (err && err.message ? err.message : '');
+      }
+    }
+    scanSession.components = components;
+    const asset = bakeHullIntoAsset(components);
+    if (asset) {
+      showBakedAsset(asset);
+      hint.textContent = 'Decoded ' + components.length + ' frames into ' + asset.voxel.voxels.length + ' voxels. Orbit the scan mesh, then Save.';
+    } else if (components.length) {
+      applyScanSessionToAsset();
+      hint.textContent = 'Recorded ' + components.length + ' frames, but the hull stayed empty. Turn a full circle inside the green guide and bake again.';
+    } else {
+      hint.textContent = 'No frames decoded. Stay in the green guide and run Scan 360 again.';
+    }
+  } finally {
+    scanDecodeBusy = false;
+    document.getElementById('btnScan360').disabled = !bodyReady;
+    updateExportScanButton();
+  }
+}
+
+document.getElementById('btnBakeScan').onclick = () => {
+  const asset = bakeHullIntoAsset(scanSession.components);
+  const hint = document.getElementById('scanHint');
+  if (!asset) {
+    hint.textContent = 'Need at least 3 frames with a body silhouette before a mesh can be baked.';
+    return;
+  }
+  showBakedAsset(asset);
+  hint.textContent = 'Baked ' + asset.voxel.voxels.length + ' voxels from ' + scanSession.components.length + ' frames.';
+};
+
 document.getElementById('btnExportScan').onclick = async () => {
   if (!scanSession.frames.length) return;
   const name = document.getElementById('assetName').value.trim() || current.name || 'scan';
   try {
-    await downloadScanZip(name, scanSession.frames);
-    document.getElementById('scanHint').textContent = 'Downloaded ZIP with ' + scanSession.frames.length + ' frames + manifest.json.';
+    await downloadScanZip(name, scanSession.frames.length ? scanSession.frames : scanSession.components, scanSession.videoBlob);
+    document.getElementById('scanHint').textContent = 'Downloaded ZIP with video, frames, and manifest.json.';
   } catch (err) {
     document.getElementById('scanHint').textContent = 'ZIP export failed. ' + (err && err.message ? err.message : '');
   }
@@ -899,9 +1051,9 @@ document.getElementById('btnCapture').onclick = () => {
 
 function scanForPersistence(scan) {
   if (!scan || typeof scan !== 'object') return scan;
-  const { image, capturedAt, width, height, frameCount } = scan;
+  const { image, capturedAt, width, height, frameCount, hullVoxels } = scan;
   if (!image) return undefined;
-  return { image, capturedAt, width, height, frameCount: frameCount || 0 };
+  return { image, capturedAt, width, height, frameCount: frameCount || 0, hullVoxels: hullVoxels || 0 };
 }
 
 document.getElementById('btnSave').onclick = async () => {
