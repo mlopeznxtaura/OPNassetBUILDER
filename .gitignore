@@ -8,5 +8,8 @@ credentials.json
 node_modules/
 .wrangler/
 .tmp_video_frames/
+dist/
+assets/*_web.glb
+assets/*_engine.glb
 .DS_Store
 Thumbs.db

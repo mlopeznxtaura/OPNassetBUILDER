@@ -66,7 +66,7 @@
   <ul>
     <li><strong>voxel</strong> — grid of colored cubes; <code>paint_voxels</code> or <code>upsert_asset</code> with <code>cells</code>. Optional <code>seedStarter</code> for name-based starter mesh.</li>
     <li><strong>sprite</strong> — 2D pixel grid; <code>paint_sprite</code>.</li>
-    <li><strong>character</strong> — <code>character.src</code> must be a <strong>web</strong> GLB (<code>/assets/*_web.glb</code> or blob). Presets <code>female-hero</code> / <code>male-hero</code> are catalog pointers only.</li>
+    <li><strong>character</strong> — <code>character.src</code> = <strong>web</strong> GLB on <code>/api/blobs/{sessionId}/…</code> (recipe upload) or stock <code>/assets/*-hero.gltf</code>. Presets <code>female-hero</code> / <code>male-hero</code> only.</li>
     <li><strong>kit</strong> — <code>kit.derivatives.web</code> (preview) + <code>kit.derivatives.engine</code> (Unreal/Unity parts). Build: <code>python scripts/build_characters.py --out assets</code>. <a href="/docs/KIT_AND_ENGINE_EXPORT.md">KIT_AND_ENGINE_EXPORT.md</a></li>
     <li><strong>scan</strong> — Scan 360: video, frame decode, visual-hull voxel bake; save stores thumbnail + <code>frameCount</code> / <code>hullVoxels</code>.</li>
   </ul>

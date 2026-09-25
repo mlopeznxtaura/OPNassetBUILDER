@@ -5,7 +5,7 @@
 - **Per-session studios**: each visitor gets a fresh library + level (not one global shared room).
 - **Automated kits**: named-part GLBs (recipe output) upload without stuffing binaries into library JSON.
 - **Scan path**: webcam → video/frames → visual-hull voxel mesh in Design; optional export ZIP for external photogrammetry.
-- **Character path**: stock heroes, `/assets/*.glb` (git deploy), or session blobs via `character.src` (R2 **or** future Supabase/Mongo — R2 optional, not required).
+- **Character path**: stock heroes (`/assets/female-hero.gltf`, `male-hero.gltf` only in git), or **session blobs** for custom/recipe meshes via `character.src` / `kit.derivatives.*` (tiered blob backends).
 - **Agents**: same session as the browser via `X-GameForge-Session` + MCP stdio env.
 
 ## Architecture (current + rolling out)
@@ -25,7 +25,7 @@ Browser / MCP
 | Concern | Store | Limit |
 |---------|--------|--------|
 | Metadata (assets, voxels, pointers) | DO per `sessionId` | ~800 KB / library |
-| GLB / GLTF binaries | R2 (optional) · `/assets/` deploy · Supabase/Mongo (planned) | 25 MB/file app cap; provider free tier hard stop |
+| GLB / GLTF binaries | **Session blobs** (Supabase/S3/R2/…) · tiny stock glTF in `/assets/` only | 25 MB/file app cap; provider free tier hard stop |
 | Offline copy | `localStorage` | ~5 MB / site (fallback) |
 | Long-term archive (optional) | MongoDB Atlas M0 | Documents only, not meshes |
 

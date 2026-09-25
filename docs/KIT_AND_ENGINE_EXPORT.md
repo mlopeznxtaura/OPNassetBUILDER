@@ -2,6 +2,15 @@
 
 Desktop **web app** preview and **Unreal/Unity** import need **different files** from the same recipe. Same art; different packaging.
 
+**Important:** Recipe kits are **not** shipped inside the web app. The app stores **metadata** in your session library; mesh bytes live in **session blob storage** after you build + upload each time (or your agent does).
+
+| What | Where |
+|------|--------|
+| Recipe (parametric code) | `scripts/build_characters.py` in git |
+| Generated GLBs | `dist/kits/` locally (gitignored) |
+| Per-studio copies | `/api/blobs/{sessionId}/*.glb` |
+| Static `/assets/` | **Stock** `female-hero` / `male-hero` glTF only — not Belize/Trinidad kits |
+
 ## The two exports
 
 | Export | Filename pattern | Meshes | Used for |
@@ -11,25 +20,32 @@ Desktop **web app** preview and **Unreal/Unity** import need **different files**
 
 Do **not** load `*_engine.glb` in the browser preview if you care about smooth orbit. Do **not** send `*_web.glb` to Unreal if you need per-part names (`cargo_pocket_L`, `curl_03`, …).
 
-## Build (offline)
-
-From repo root (Python 3 + `trimesh`, `numpy`):
+## Build from scratch (offline)
 
 ```bash
-pip install trimesh numpy
-python scripts/build_characters.py --out assets
+pip install -r scripts/requirements-build.txt
+npm run build:characters
 ```
 
-Produces:
+Writes to `dist/kits/`:
 
 - `male_belizean_web.glb` + `male_belizean_engine.glb`
 - `female_trinidadian_web.glb` + `female_trinidadian_engine.glb`
 
-Deploy web files for in-app preview; upload engine files to `/api/blobs/…` for engine pipelines.
+## Upload into **your** session (required for app14)
+
+1. Open Design on app14 (creates `gf_session` / `sessionId`).
+2. Copy session id from devtools → `sessionStorage.gf_session_id` or network header `X-GameForge-Session`.
+
+```bash
+GAMEFORGE_ORIGIN=https://app14.nextaura.us GAMEFORGE_SESSION=s_YOUR_ID npm run upload:kit-blobs
+```
+
+Or `PUT` each file to `/api/blobs/{sessionId}/{filename}.glb` (Design **Import** buttons do the same for one file at a time).
 
 ## Register in the library (MCP / API)
 
-**Option A — `kind: kit` (recommended for Belize/Trinidad)**
+**`kind: kit` (recommended)**
 
 ```json
 {
@@ -38,30 +54,32 @@ Deploy web files for in-app preview; upload engine files to `/api/blobs/…` for
   "kit": {
     "recipe": { "script": "build_characters", "gender": "male", "region": "belize" },
     "derivatives": {
-      "web": { "src": "/assets/male_belizean_web.glb" },
+      "web": { "src": "/api/blobs/s_…/male_belizean_web.glb" },
       "engine": { "src": "/api/blobs/s_…/male_belizean_engine.glb" }
     }
   }
 }
 ```
 
-**Option B — quick preview as character**
+**Quick preview as character** (web file only):
 
 ```json
-{ "name": "Belize male", "kind": "character", "src": "/assets/male_belizean_web.glb" }
+{
+  "name": "Belize male",
+  "kind": "character",
+  "character": { "src": "/api/blobs/s_…/male_belizean_web.glb" }
+}
 ```
-
-Use **only** the `*_web.glb` path for `character.src`.
 
 ## Blob API
 
-Upload either file with `PUT /api/blobs/{sessionId}/{filename}.glb` or `POST …/upload-url`.  
+`PUT /api/blobs/{sessionId}/{filename}.glb` or `POST …/upload-url`.  
 Extensions for engine bundles: see `shared/engineBlob.js` (fbx, zip, unitypackage, …).
 
 ## GUI
 
-Design → **Kit (recipe)** or **Character** → **Import web GLB** = preview file. Engine file is uploaded separately and listed under kit derivatives (not previewed as 200 meshes).
+Design → **Kit** → import web + engine GLBs (uploads to **your** session blobs) → Save. Library JSON stores paths only.
 
-**Scan 360** in Design produces a low-res voxel hull from webcam silhouettes — not the same quality ceiling as this recipe. Use kits for Belize/Trinidad heroes; use Scan for quick props or body-scale blockouts.
+**Scan 360** builds a voxel hull in the browser — different pipeline, lower ceiling than the recipe kits.
 
 See also [PLATFORM_PLAN.md](./PLATFORM_PLAN.md) pipeline B.

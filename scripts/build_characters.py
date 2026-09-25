@@ -620,7 +620,7 @@ if __name__ == '__main__':
     import os
 
     parser = argparse.ArgumentParser(description='Belize / Trinidad parametric kits — web + engine GLB exports')
-    parser.add_argument('--out', default='assets', help='Output directory (default: assets/)')
+    parser.add_argument('--out', default='dist/kits', help='Output directory (default: dist/kits — not deployed with the app)')
     parser.add_argument('--gender', choices=('male', 'female', 'both'), default='both')
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -644,4 +644,4 @@ if __name__ == '__main__':
             'meshes:', len(rig.scene.geometry),
             'tris:', rig.count,
         )
-    print('Register in app14: kit.derivatives.web -> *_web.glb ; kit.derivatives.engine -> *_engine.glb')
+    print('Next: upload to your session (not git): GAMEFORGE_SESSION=s_… npm run upload:kit-blobs')

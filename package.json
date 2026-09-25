@@ -11,7 +11,8 @@
     "setup:oci": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-oci.ps1",
     "setup:clis": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-storage-clis.ps1",
     "setup:sync-secrets": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-wrangler-secrets.ps1",
-    "build:characters": "python scripts/build_characters.py --out assets"
+    "build:characters": "python scripts/build_characters.py",
+    "upload:kit-blobs": "node scripts/upload-kit-blobs.mjs"
   },
   "dependencies": {
     "aws4fetch": "^1.0.20"

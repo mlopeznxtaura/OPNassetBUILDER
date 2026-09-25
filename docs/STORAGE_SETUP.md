@@ -6,12 +6,12 @@ app14 splits **small JSON** (library per session, ~800 KB cap) from **large GLB 
 
 | Option | Billing on file? | Typical free cap | Best for |
 |--------|------------------|------------------|----------|
-| **A. Git + `/assets/` deploy** | No | Repo size | Kit GLBs built by scripts/agents, committed, `npm run deploy` |
+| **A. Git + `/assets/` deploy** | No | Repo size | **Stock** hero glTF only (~70 KB each), not recipe kits |
 | **B. Supabase Storage** | Often **no card** for free project | **1 GB** storage | Automated user/agent upload without R2 |
 | **C. MongoDB Atlas M0** | **No card** on M0 signup (OAuth) | **512 MB** whole cluster | Same; store blobs via Worker + GridFS or capped documents |
 | **D. Cloudflare R2** | **Often requires card on file** to enable product | Free tier when enabled | Same account as Workers; optional only |
 
-**Recommendation if you refuse Cloudflare billing:** use **A** for Belize/Trinidad kits (commit GLB → deploy), or **B** when we wire Supabase upload (next backend). Sessions + library already work on Workers **without** R2.
+**Recommendation if you refuse Cloudflare billing:** run `npm run build:characters` locally, then **B** (Supabase) or Worker blob PUT once secrets are synced. Recipe kits are **not** committed to git. Sessions + library work on Workers **without** R2 when another tier is configured.
 
 ### App-level locks (we enforce regardless of provider)
 
@@ -66,13 +66,12 @@ Helper scripts:
 
 ---
 
-## 2. Path A — No upload API (zero storage signup)
+## 2. Path A — Stock heroes only (zero blob signup)
 
-1. Put `female-trinidadian.glb` in `assets/`.
-2. `npm run deploy`.
-3. `upsert_asset { kind:"character", src:"/assets/female-trinidadian.glb" }`.
+1. Use catalog models `female-hero` / `male-hero` (already at `/assets/*.gltf`).
+2. `upsert_asset { kind:"character", model:"female-hero" }`.
 
-Fully automated for **your** pipeline if the recipe agent commits + CI deploys. Not per-visitor upload.
+Belize/Trinidad kits: `npm run build:characters` → `npm run upload:kit-blobs` with a session id (Path B/C), not Path A.
 
 ---
 
