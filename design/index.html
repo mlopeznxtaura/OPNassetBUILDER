@@ -8,31 +8,27 @@
   :root { --bg:#111318; --panel:#1a1d24; --line:#2a2e38; --text:#e8e9ec; --accent:#5cc8ff; }
   * { box-sizing: border-box; }
   body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); display:flex; height:100vh; overflow:hidden; }
-  #scanSection { flex:0 0 min(38vw, 480px); min-width:280px; max-width:520px; display:flex; flex-direction:column; background:#10131a; border-right:1px solid var(--line); min-height:0; height:100vh; order:1; }
-  #scanSection #scanBody { flex:1; min-height:0; }
-  #scanSection .step-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; padding:14px 14px 0; }
-  #scanSection h2 { margin:0 0 10px; padding:0 14px; font-size:12px; }
+  #drawPanel { width:280px; flex:0 0 280px; order:1; background:var(--panel); border-right:1px solid var(--line); padding:14px; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  #drawStage { flex:1; min-height:180px; background:#0f1115; border:1px solid var(--line); border-radius:8px; position:relative; }
+  #drawCanvas { width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
   #sidebar { width:300px; flex:0 0 300px; background:var(--panel); border-left:1px solid var(--line); padding:14px; overflow-y:auto; order:3; }
   #main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; order:2; }
   #mainBody { flex:1; display:flex; min-height:0; min-width:0; }
   #toolbar { display:flex; gap:8px; padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line); align-items:center; flex-wrap:wrap; }
   #viewport { flex:1; min-width:0; min-height:0; position:relative; background:#14161c; }
-  #scanBody { flex:1; display:flex; min-height:0; }
-  #scanCenter { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px 10px 14px; gap:12px; }
-  #scanFrame { width:100%; max-width:420px; flex:1; min-height:120px; max-height:min(52vh, 520px); display:flex; align-items:center; justify-content:center; position:relative; }
-  #scanStage { position:relative; width:100%; max-height:100%; display:none; border-radius:10px; overflow:hidden; background:#000; box-shadow:0 8px 32px rgba(0,0,0,.45); }
+  #scanBar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 14px; background:#10131a; border-bottom:1px solid var(--line); }
+  #scanBar select { width:auto; max-width:150px; margin:0; }
+  #scanBar .hint { margin:0; flex:1 1 160px; }
+  #scanSlot { display:none; height:150px; background:#000; border-bottom:1px solid var(--line); align-items:center; justify-content:center; position:relative; }
+  #scanSlot.open { display:flex; }
+  #scanFrame { width:100%; height:150px; display:flex; align-items:center; justify-content:center; position:relative; }
+  #scanStage { position:relative; height:150px; display:none; }
   #scanStage.live { display:block; }
-  #scanVideo, #scanGuide { width:100%; max-height:min(52vh, 520px); display:block; object-fit:contain; }
+  #scanVideo, #scanGuide { height:150px; width:auto; max-width:100%; display:block; object-fit:contain; }
   #scanGuide { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-  #scanPreview { display:none; max-width:100%; max-height:min(52vh, 520px); width:auto; height:auto; border-radius:10px; background:#000; box-shadow:0 8px 32px rgba(0,0,0,.45); object-fit:contain; }
-  #scanIdle { font-size:12px; color:#6b7280; text-align:center; padding:24px 16px; border:1px dashed var(--line); border-radius:10px; width:100%; max-width:420px; }
-  #scanPrimary { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; width:100%; max-width:420px; }
-  #scanPrimary button { flex:1; min-width:120px; padding:10px 14px; font-size:13px; }
-  #scanRail { flex:0 0 168px; padding:12px 12px 14px; border-left:1px solid var(--line); overflow-y:auto; background:var(--panel); min-height:0; }
-  #sidebar .step-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; }
-  #scanRail label { margin-top:0; }
-  #scanRail button { width:100%; margin-top:8px; }
-  #scanRail #scanHint { margin-top:12px; }
+  #scanPreview { display:none; height:150px; width:auto; max-width:100%; object-fit:contain; }
+  #scanIdle { display:none; }
+  .step-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; }
   #bootError { display:none; margin:12px; padding:10px 12px; background:#4a1f24; border-radius:8px; font-size:13px; }
   #viewport canvas { display:block; }
   h1 { font-size:15px; margin:0 0 12px; color:var(--accent); }
@@ -70,37 +66,18 @@
 </head>
 <body>
 
-<section id="scanSection" aria-label="Body scan">
-  <p class="step-label">Step 1 · optional</p>
-  <h2>Scan 360</h2>
-  <div id="scanBody">
-    <div id="scanCenter">
-      <div id="scanFrame">
-        <div id="scanIdle">Start the webcam to see the body guide. Step back until the outline turns green.</div>
-        <div id="scanStage">
-          <video id="scanVideo" autoplay playsinline muted></video>
-          <canvas id="scanGuide"></canvas>
-        </div>
-        <img id="scanPreview" alt="Captured scan reference">
-      </div>
-      <div id="scanPrimary">
-        <button id="btnCapture" disabled title="2D thumbnail only — not a 3D mesh">Reference photo</button>
-        <button class="primary" id="btnScan360" disabled>Scan 360</button>
-        <button class="primary" id="btnBakeScan" disabled>Bake voxel mesh</button>
-      </div>
-      <p class="hint" style="margin:8px 0 0;font-size:11px;max-width:420px;text-align:center">Rough voxel hull from webcam. For hero kits use <strong>Step 2 → Kit</strong> + offline recipe.</p>
-    </div>
-    <aside id="scanRail">
-      <label for="scanCamera">Camera</label>
-      <select id="scanCamera" disabled>
-        <option value="">Default camera</option>
-      </select>
-      <button id="btnCamera">Start webcam</button>
-      <button id="btnExportScan" disabled>Export scan ZIP</button>
-      <div id="scanHint" class="hint">On Mac, iPhone may appear in the camera list. Windows Phone USB is not a PC webcam — open this page on the phone browser to use its camera.</div>
-    </aside>
+<aside id="drawPanel" aria-label="Drawing animation layer">
+  <p class="step-label">Stage 1 · draw</p>
+  <h2 style="margin-top:0">Animation layer</h2>
+  <p class="hint" style="margin-top:0">Draw strokes. <strong>New frame</strong> keeps the last pose as onion skin. <strong>Play</strong> flips frames. The same strokes show in the 3D view. Full 3D version of this idea is <a href="https://docs.blender.org/manual/en/latest/grease_pencil/introduction.html" target="_blank" rel="noopener">Blender Grease Pencil</a> (open source). 2D cousins: Pencil2D, OpenToonz, Krita.</p>
+  <div id="drawStage"><canvas id="drawCanvas"></canvas></div>
+  <div class="row" style="margin-top:8px; flex-wrap:wrap">
+    <button type="button" class="primary" id="btnDrawPlay">Play</button>
+    <button type="button" id="btnDrawFrame">New frame</button>
+    <button type="button" id="btnDrawClear">Clear</button>
   </div>
-</section>
+  <div id="drawStatus" class="hint">Frame 1 / 1 · 0 strokes</div>
+</aside>
 
 <div id="main">
   <div id="toolbar">
@@ -109,6 +86,27 @@
     <span id="sessionBadge" class="badge" title="Studio session id" style="display:none"></span>
     <span id="toolbarStats" class="stats-inline"></span>
   </div>
+  <div id="scanBar" aria-label="Body scan">
+    <button id="btnCamera">Start webcam</button>
+    <select id="scanCamera" disabled aria-label="Camera">
+      <option value="">Default camera</option>
+    </select>
+    <button id="btnCapture" disabled title="2D thumbnail only — not a 3D mesh">Reference photo</button>
+    <button class="primary" id="btnScan360" disabled>Scan 360</button>
+    <button class="primary" id="btnBakeScan" disabled>Bake voxel mesh</button>
+    <button id="btnExportScan" disabled>Export scan ZIP</button>
+    <div id="scanHint" class="hint">Webcam guide opens above the 3D view. Stand so head, hands, and feet fit the outline.</div>
+  </div>
+  <div id="scanSlot">
+    <div id="scanFrame">
+      <div id="scanIdle"></div>
+      <div id="scanStage">
+        <video id="scanVideo" autoplay playsinline muted></video>
+        <canvas id="scanGuide"></canvas>
+      </div>
+      <img id="scanPreview" alt="Captured scan reference">
+    </div>
+  </div>
   <div id="bootError"></div>
   <div id="mainBody">
     <div id="viewport"></div>
@@ -116,7 +114,7 @@
 </div>
 
 <div id="sidebar">
-  <p class="step-label">Step 2 · build &amp; library</p>
+  <p class="step-label">Build &amp; library</p>
   <h1>OPNassetBUILDER - Design</h1>
   <div class="row" style="justify-content:space-between">
     <span class="badge">Stage 1 / 2</span>
@@ -232,10 +230,6 @@
       </tr>
     </tbody>
   </table>
-  <div class="hint" style="padding:10px; border:1px solid var(--line); border-radius:8px; background:#0f1115">
-    <strong>Offline recipe</strong> (Belize / Trinidad): <code>npm run build:characters</code> → <code>npm run upload:kit-blobs</code> → register as <strong>Kit</strong> above.
-  </div>
-
   <h2>Library <span id="libCount" class="badge">0</span></h2>
   <div id="assetList"></div>
   <div class="row" style="margin-top:10px">
@@ -253,7 +247,6 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
 <script src="../shared/vendor/OrbitControls.js"></script>
-<script src="../shared/voxelMesh.js"></script>
 <script>
 if (!window.THREE || !THREE.OrbitControls) {
   const el = document.getElementById('bootError');

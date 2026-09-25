@@ -1,6 +1,7 @@
 import { createLiveClient } from '../shared/liveClient.js';
 import { bodyFit, bodyYawFromLandmarks, guidePolylines, skeletonSegments } from '../shared/bodyGuide.js';
 import { captureJpegFromVideo, componentFromVideo, assignOrbitAngles, downloadScanZip, pickBestScanFrame, startScanRecorder } from '../shared/scanCapture.js';
+import './drawLayer.js';
 import { visualHull } from '../shared/visualHull.js';
 import {
   computeVoxelMeshStats,
@@ -11,8 +12,10 @@ import {
   gfNewId,
   gfValidateAsset,
   kitWebPreviewSrc,
+  normalizeSpriteAsset,
   seedVoxelStarter
 } from '../shared/forgeCore.js';
+import { gfBuildSpriteMesh, gfBuildVoxelMesh } from '../shared/voxelMesh.js';
 
 const STORAGE_KEY = 'gameforge_assets_v1';
 const live = createLiveClient();
@@ -390,6 +393,11 @@ function loadAsset(asset) {
   selectedLibId = asset.id;
   viewStats = (asset.kind === 'character' || asset.kind === 'kit') ? null : viewStats;
   current = JSON.parse(JSON.stringify(asset));
+  if (current.kind === 'sprite') {
+    normalizeSpriteAsset(current);
+    document.getElementById('sw').value = current.sprite.w;
+    document.getElementById('sh').value = current.sprite.h;
+  }
   document.getElementById('assetName').value = current.name || '';
   document.getElementById('assetCollidable').checked = !!current.collidable;
   document.getElementById('assetKind').value = current.kind;
@@ -797,10 +805,11 @@ const scanIdle = document.getElementById('scanIdle');
 const scanGuide = document.getElementById('scanGuide');
 
 function updateScanIdle() {
-  if (!scanIdle) return;
+  const slot = document.getElementById('scanSlot');
   const live = scanStage && scanStage.classList.contains('live');
   const still = scanPreview && scanPreview.style.display !== 'none' && scanPreview.src;
-  scanIdle.style.display = live || still ? 'none' : 'block';
+  if (scanIdle) scanIdle.style.display = 'none';
+  if (slot) slot.classList.toggle('open', !!(live || still));
 }
 const guideCtx = scanGuide.getContext('2d');
 
@@ -880,7 +889,28 @@ function updateExportScanButton() {
   if (!btn) return;
   btn.disabled = scanSession.frames.length === 0 && !scanSession.videoBlob;
   const bake = document.getElementById('btnBakeScan');
-  if (bake) bake.disabled = scanSession.components.length < 3 && scanSession.frames.length < 3 && !scanSession.videoBlob;
+  if (bake) bake.disabled = scanSession.components.length < 1 && !scanSession.videoBlob;
+}
+
+let liveScanAssetId = null;
+
+function previewPartialHull(components) {
+  const built = bakeHullIntoAsset(components);
+  if (!built) return null;
+  if (liveScanAssetId && current && current.id === liveScanAssetId && current.kind === 'voxel') {
+    current.voxel.size = built.voxel.size;
+    current.voxel.voxels = built.voxel.voxels;
+    current.voxel.cellSize = built.voxel.cellSize;
+    if (built.scan) current.scan = built.scan;
+    rebuildVoxelPreview();
+    dirty = true;
+    scanSession.partialVoxels = current.voxel.voxels.length;
+    return current;
+  }
+  liveScanAssetId = built.id;
+  showBakedAsset(built);
+  scanSession.partialVoxels = built.voxel.voxels.length;
+  return built;
 }
 
 function applyScanSessionToAsset() {
@@ -999,7 +1029,7 @@ function bakeHullIntoAsset(components) {
   const withMask = components.filter(frame => frame.mask && frame.mask.some(v => v > 128));
   const ready = withMask.filter(frame => frame.valid !== false);
   const source = ready.length >= 3 ? ready : withMask;
-  if (source.length < 3) return null;
+  if (!source.length) return null;
   const hull = visualHull(assignOrbitAngles(source), { size: [16, 32, 16] });
   if (!hull.voxels.length) return null;
   const baseName = document.getElementById('assetName').value.trim() || current.name || 'scan';
@@ -1120,6 +1150,8 @@ document.getElementById('btnScan360').onclick = () => {
   scanSession.frames = [];
   scanSession.components = [];
   scanSession.videoBlob = null;
+  scanSession.partialVoxels = 0;
+  liveScanAssetId = null;
   scanSession.recorder = startScanRecorder(scanStream);
   scanSession.active = true;
   updateExportScanButton();
@@ -1150,12 +1182,13 @@ document.getElementById('btnScan360').onclick = () => {
       });
     }
     const validCount = scanSession.frames.filter(f => f.valid !== false).length;
-    hint.textContent = 'Turn slowly. Frames ' + validCount + '/' + targetFrames + ' · ' + left + 's left' + (ready ? '' : ' (paused — stay in guide)');
+    if (comp) previewPartialHull(scanSession.components);
+    const voxels = scanSession.partialVoxels || 0;
+    hint.textContent = (voxels ? ('Partial · ' + voxels + ' voxels · ') : 'Waiting for a silhouette · ') + 'frames ' + validCount + '/' + targetFrames + ' · ' + left + 's' + (ready ? '' : ' (stay in guide)');
     updateExportScanButton();
   };
   captureFrame();
   scan360CaptureTimer = setInterval(captureFrame, 750);
-  hint.textContent = 'Turn slowly through one full circle. Stay inside the green guide. ' + left + 's';
   scan360Timer = setInterval(() => {
     left -= 1;
     if (!scanStream || left <= 0) {
@@ -1166,7 +1199,8 @@ document.getElementById('btnScan360').onclick = () => {
       return;
     }
     const validCount = scanSession.frames.filter(f => f.valid !== false).length;
-    hint.textContent = 'Turn slowly. Frames ' + validCount + '/' + targetFrames + ' · ' + left + 's';
+    const voxels = scanSession.partialVoxels || 0;
+    hint.textContent = (voxels ? ('Partial · ' + voxels + ' voxels · ') : 'Turn slowly · ') + 'frames ' + validCount + '/' + targetFrames + ' · ' + left + 's';
   }, 1000);
 };
 
@@ -1210,7 +1244,7 @@ document.getElementById('btnBakeScan').onclick = () => {
   const asset = bakeHullIntoAsset(scanSession.components);
   const hint = document.getElementById('scanHint');
   if (!asset) {
-    hint.textContent = 'Need at least 3 frames with a body silhouette before a mesh can be baked.';
+    hint.textContent = 'Need a body silhouette in frame before voxels can appear.';
     return;
   }
   showBakedAsset(asset);
@@ -1322,11 +1356,11 @@ function applyRemoteLibrary(library) {
   refreshLibraryList();
 
   const nameInField = document.getElementById('assetName').value.trim();
-  const localPaint = current.kind === 'character'
+  const localPaint = current.kind === 'character' || current.kind === 'kit'
     ? false
     : current.kind === 'voxel'
       ? current.voxel.voxels.length > 0
-      : current.sprite.pixels.some(Boolean);
+      : !!(current.sprite && current.sprite.pixels && current.sprite.pixels.some(Boolean));
 
   if (selectedLibId) {
     const updated = library.assets.find(a => a.id === selectedLibId);

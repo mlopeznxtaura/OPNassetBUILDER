@@ -1,0 +1,16 @@
+---
+description: Run a TypeSafe Jev decision before any product iteration
+alwaysApply: true
+---
+
+# Jev before iteration
+
+Before changing Design, scan, kits, storage, or docs that change product behavior, run the TypeSafe Jev gate and follow it.
+
+1. Write a one-paragraph proposal of the change.
+2. Run `npm run jev:gate -- "the proposal"`.
+3. If exit code is 2, stop. `TYPESAFE_API_KEY` is missing or the API failed. Ask the user. Do not iterate anyway.
+4. If exit code is 1, do not implement. Report Jev's `focus`, `proceed` probability, and `risk`.
+5. If exit code is 0, implement only the printed `focus`. Do not expand into a second feature in the same change.
+
+The gate calls `POST https://api.typesafe.ai/v1/systemone` with model `jev-latest`. It does not train on the proposal. Never print or commit the API key.

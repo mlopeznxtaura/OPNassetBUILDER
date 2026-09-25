@@ -132,17 +132,40 @@ export function kitWebPreviewSrc(asset) {
   return part ? part.src : null;
 }
 
+export function spriteCssColor(c) {
+  const s = String(c || '').trim();
+  if (!s) return '';
+  if (/^#/.test(s) || /^rgb/i.test(s)) return s;
+  return '#' + s;
+}
+
+/** Ensure sprite.w/h/pixels are valid after API or library round-trips. */
+export function normalizeSpriteAsset(asset) {
+  if (!asset || asset.kind !== 'sprite') return asset;
+  const w = clampInt(asset.sprite && asset.sprite.w, 1, 64) || 16;
+  const h = clampInt(asset.sprite && asset.sprite.h, 1, 64) || 16;
+  const raw = asset.sprite && asset.sprite.pixels;
+  const pixels = new Array(w * h).fill('');
+  if (Array.isArray(raw)) {
+    for (let i = 0; i < Math.min(raw.length, pixels.length); i++) {
+      pixels[i] = spriteCssColor(raw[i]);
+    }
+  }
+  asset.sprite = { w, h, pixels };
+  return asset;
+}
+
 export function createSpriteAsset({ id, name, w = 16, h = 16, collidable = false } = {}) {
   const width = clampInt(w, 1, 64);
   const height = clampInt(h, 1, 64);
-  return {
+  return normalizeSpriteAsset({
     id: id || gfNewId(),
     name: name || 'unnamed',
     kind: 'sprite',
     collidable: !!collidable,
     sprite: { w: width, h: height, pixels: new Array(width * height).fill('') },
     createdAt: Date.now()
-  };
+  });
 }
 
 export function findAsset(library, { id, name } = {}) {
@@ -321,7 +344,7 @@ export function paintSpritePixels(asset, pixels) {
       errors.push('sprite pixel out of bounds ' + p.x + ',' + p.y);
       continue;
     }
-    asset.sprite.pixels[y * w + x] = (p.erase || p.c === '') ? '' : String(p.c || '');
+    asset.sprite.pixels[y * w + x] = (p.erase || p.c === '') ? '' : spriteCssColor(p.c);
   }
   return errors;
 }

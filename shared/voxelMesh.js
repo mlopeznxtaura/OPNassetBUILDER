@@ -1,9 +1,11 @@
 /**
  * Builds three.js Object3D from a GameForge asset.
- * Requires THREE to be loaded globally before this script.
+ * Requires THREE to be loaded globally before importing this module.
  */
 
-function gfBuildVoxelMesh(asset, opts) {
+import { normalizeSpriteAsset } from './forgeCore.js';
+
+export function gfBuildVoxelMesh(asset, opts) {
   const recenter = !opts || opts.recenter !== false;
   const { cellSize, voxels } = asset.voxel;
   const group = new THREE.Group();
@@ -71,33 +73,59 @@ function gfLoadCharacterIntoGroup(group, src) {
   }, undefined, () => {});
 }
 
-function gfBuildSpriteMesh(asset) {
+export function gfBuildSpriteMesh(asset) {
+  normalizeSpriteAsset(asset);
   const { w, h, pixels } = asset.sprite;
   const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
+  canvas.width = w;
+  canvas.height = h;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, w, h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const c = pixels[y * w + x];
-      if (c) { ctx.fillStyle = c; ctx.fillRect(x, y, 1, 1); }
+      if (c) {
+        ctx.fillStyle = c;
+        ctx.fillRect(x, y, 1, 1);
+      }
     }
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  const aspect = w / h;
-  sprite.scale.set(aspect * 2, 2, 1);
-  sprite.position.y = 1;
+  tex.needsUpdate = true;
+  if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+
+  const hasPixels = pixels.some(Boolean);
+  const aspect = w / h || 1;
+  const planeH = 2;
+  const planeW = aspect * planeH;
+  const geo = new THREE.PlaneGeometry(planeW, planeH);
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: hasPixels,
+    opacity: hasPixels ? 1 : 0
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = planeH / 2;
+
   const group = new THREE.Group();
   group.name = asset.name;
-  group.add(sprite);
+  group.add(mesh);
+
+  const frame = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geo),
+    new THREE.LineBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: 0.5 })
+  );
+  frame.position.copy(mesh.position);
+  group.add(frame);
+
   return group;
 }
 
-function gfBuildAssetMesh(asset) {
+export function gfBuildAssetMesh(asset) {
   if (asset.kind === 'voxel') return gfBuildVoxelMesh(asset);
   if (asset.kind === 'sprite') return gfBuildSpriteMesh(asset);
   if (asset.kind === 'character') {

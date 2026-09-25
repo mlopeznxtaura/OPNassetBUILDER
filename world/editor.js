@@ -1,5 +1,6 @@
 import { createLiveClient } from '../shared/liveClient.js';
 import { collidesAt, gfNewId } from '../shared/forgeCore.js';
+import { gfBuildAssetMesh } from '../shared/voxelMesh.js';
 
 const STORAGE_KEY = 'gameforge_assets_v1';
 const LEVEL_KEY = 'gameforge_level_v1';
