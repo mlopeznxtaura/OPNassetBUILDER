@@ -108,11 +108,6 @@
     </div>
     <div id="kitMeshInfo" class="hint" style="margin-top:6px">Web: — · Engine: —</div>
   </div>
-  <div id="exportProfilesBox" class="hint" style="margin-top:12px; padding:10px; border:1px solid var(--line); border-radius:8px; background:#0f1115">
-    <strong>Offline recipe export</strong> (Belize / Trinidad):<br>
-    <code>python scripts/build_characters.py --out assets</code><br>
-    → <code>*_web.glb</code> (browser) + <code>*_engine.glb</code> (engines). Desktop web app target.
-  </div>
   <div id="voxelSizeCtl">
     <label>Grid size (X × Y × Z)</label>
     <div class="row">
@@ -166,10 +161,30 @@
   <div id="meshStats" class="stats-panel">—</div>
 
   <h2>Export profiles</h2>
-  <div class="hint" style="margin-bottom:10px">
-    <strong>library.json</strong> = metadata only (≤800 KB). Meshes live at blob URLs.<br>
-    <strong>web GLB</strong> = merged meshes for Design/World.<br>
-    <strong>engine GLB/FBX/ZIP</strong> = named parts; download via GET <code>/api/blobs/…</code>, not used for viewport.
+  <p class="hint" style="margin:0 0 10px"><strong>library.json</strong> holds metadata only (≤800 KB). Mesh bytes live at <code>/assets/…</code> or <code>/api/blobs/{sessionId}/…</code>. Full guide: <a href="/docs/KIT_AND_ENGINE_EXPORT.md" target="_blank" rel="noopener">KIT_AND_ENGINE_EXPORT.md</a>.</p>
+  <table style="width:100%; font-size:12px; border-collapse:collapse; margin-bottom:12px">
+    <thead>
+      <tr style="color:#9aa1ad; text-align:left">
+        <th style="padding:6px 8px; border-bottom:1px solid var(--line)">Profile</th>
+        <th style="padding:6px 8px; border-bottom:1px solid var(--line)">File</th>
+        <th style="padding:6px 8px; border-bottom:1px solid var(--line)">Used in this app</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:6px 8px; border-bottom:1px solid var(--line)"><strong>web</strong></td>
+        <td style="padding:6px 8px; border-bottom:1px solid var(--line)"><code>*_web.glb</code> (merged by material)</td>
+        <td style="padding:6px 8px; border-bottom:1px solid var(--line)">Design viewport, World, <code>character.src</code>, <code>kit.derivatives.web</code></td>
+      </tr>
+      <tr>
+        <td style="padding:6px 8px; border-bottom:1px solid var(--line)"><strong>engine</strong></td>
+        <td style="padding:6px 8px; border-bottom:1px solid var(--line)"><code>*_engine.glb</code> (+ FBX/ZIP optional)</td>
+        <td style="padding:6px 8px; border-bottom:1px solid var(--line)">Unreal/Unity only — <code>kit.derivatives.engine</code>; GET blob, <em>not</em> viewport</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="hint" style="padding:10px; border:1px solid var(--line); border-radius:8px; background:#0f1115">
+    <strong>Offline recipe</strong> (Belize / Trinidad): <code>python scripts/build_characters.py --out assets</code> or <code>npm run build:characters</code> → upload both GLBs, register as <strong>Kit</strong> above. Desktop web target (no mobile preview requirement).
   </div>
 
   <h2>Library <span id="libCount" class="badge">0</span></h2>

@@ -33,7 +33,15 @@
 
   <h2>What this is</h2>
   <p>OPNassetBUILDER (app14): <strong>Stage 1</strong> design (voxels, sprites, characters, Scan 360 → voxel hull), <strong>Stage 2</strong> world placement. Each browser session gets its own library via <code>POST /api/sessions</code> and a Durable Object keyed by <code>sessionId</code>. Large GLBs go to <code>/api/blobs/…</code> (tiered storage: Supabase, S3, R2 last — see <a href="/docs/STORAGE_TIERS.md">STORAGE_TIERS</a>), not inside library JSON (~800 KB cap).</p>
-  <p>Platform plan: <a href="/docs/PLATFORM_PLAN.md">docs/PLATFORM_PLAN.md</a> · Storage setup: <a href="/docs/STORAGE_SETUP.md">docs/STORAGE_SETUP.md</a></p>
+  <p>Platform plan: <a href="/docs/PLATFORM_PLAN.md">docs/PLATFORM_PLAN.md</a> · Storage setup: <a href="/docs/STORAGE_SETUP.md">docs/STORAGE_SETUP.md</a> · <strong>Kit exports</strong>: <a href="/docs/KIT_AND_ENGINE_EXPORT.md">KIT_AND_ENGINE_EXPORT.md</a></p>
+
+  <h2>Export profiles (web vs engine)</h2>
+  <table style="width:100%; font-size:13px; border-collapse:collapse; margin-bottom:8px">
+    <tr style="color:#9aa1ad"><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)">Profile</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)">Pattern</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)">Register as</th></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><strong>web</strong></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><code>*_web.glb</code></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><code>character.src</code> or <code>kit.derivatives.web</code> — preview in Design/World</td></tr>
+    <tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><strong>engine</strong></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><code>*_engine.glb</code></td><td style="padding:6px 8px;border-bottom:1px solid var(--line)"><code>kit.derivatives.engine</code> — Unreal/Unity; never browser viewport</td></tr>
+  </table>
+  <p class="hint" style="font-size:13px;color:#9aa1ad">Build both: <code>python scripts/build_characters.py --out assets</code>. MCP <code>upsert_asset</code> with <code>kind:"kit"</code> and <code>derivatives</code> shorthand is in <a href="/agent.json">agent.json</a> → <code>asset_kinds.kit.export_profiles</code>.</p>
 
   <h2>Sessions &amp; blobs</h2>
   <ul>

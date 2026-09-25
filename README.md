@@ -60,16 +60,18 @@ gameforge/
 
 - **Discovery**: `GET /agent.json`, `GET /agent.txt`, `/agents/index.html`
 - **Plan**: [docs/PLATFORM_PLAN.md](docs/PLATFORM_PLAN.md) — sessions, R2 blobs, scan vs kit pipelines
+- **Kit exports**: [docs/KIT_AND_ENGINE_EXPORT.md](docs/KIT_AND_ENGINE_EXPORT.md) — `*_web.glb` (app preview) vs `*_engine.glb` (Unreal/Unity)
 - **Ops**: [docs/STORAGE_SETUP.md](docs/STORAGE_SETUP.md) — Wrangler OAuth, R2 buckets, optional MongoDB Atlas M0
 - **Session**: `POST /api/sessions` → per-user studio; header `X-GameForge-Session` on API/MCP
-- **Blobs**: `PUT /api/blobs/{sessionId}/file.glb` (R2) — use returned path as `character.src`
+- **Blobs**: `PUT /api/blobs/{sessionId}/file.glb` (tiered storage) — use **web** GLB path as `character.src` or `kit.derivatives.web`; **engine** GLB as `kit.derivatives.engine` only
 - **MCP**: `POST /mcp` (JSON-RPC). Stdio: `GAMEFORGE_ORIGIN` + `GAMEFORGE_SESSION` → `node mcp/stdio.js`
 
 Tools: `list_assets`, `get_asset`, `upsert_asset`, `paint_voxels`, `paint_sprite`, `delete_asset`, `get_level`, `place`, `remove_placement`, `clear_level`, `test_level`.
 
 ## Data formats
 
-- **Asset**: `{ id, name, kind: 'voxel'|'sprite'|'character', collidable, voxel?, sprite?, character?, scan?, createdAt }`
+- **Asset**: `{ id, name, kind: 'voxel'|'sprite'|'character'|'kit', collidable, voxel?, sprite?, character?, kit?, scan?, createdAt }`
+- **Kit**: `kit.derivatives.web` + `kit.derivatives.engine` (see KIT_AND_ENGINE_EXPORT.md); build with `npm run build:characters` / `scripts/build_characters.py`
 - **Library**: `{ version, assets: Asset[] }` — persisted at `localStorage['gameforge_assets_v1']`
 - **Level**: `{ version, ground: {size}, placements: [{assetId, x, y, z, ry, scale}] }`
 

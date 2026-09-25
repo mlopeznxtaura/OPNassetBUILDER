@@ -66,7 +66,7 @@ export function buildAgentManifest(url) {
           'female-hero': base + '/assets/female-hero.gltf',
           'male-hero': base + '/assets/male-hero.gltf'
         },
-        agent_notes: 'character.src must be /assets/*.gltf|.glb OR /api/blobs/{sessionId}/*.glb after PUT upload. Catalog model (female-hero|male-hero) is a preset pointer only. list_assets includes characterSrc. Named-part kits: upload GLB then upsert with src — do not embed binary in library JSON.'
+        agent_notes: 'character.src must be a WEB export (/assets/*_web.glb, /assets/*.gltf, or /api/blobs/{sessionId}/*_web.glb). Never use *_engine.glb for preview. Catalog model (female-hero|male-hero) is a preset pointer only. For Belize/Trinidad-style kits use kind:kit with derivatives.web + derivatives.engine.'
       },
       kit: {
         fields: 'id, name, kind:"kit", kit:{ recipe:{}, derivatives:{ web:{src}, engine:{src}, unreal?, unity?, zip? }, parts:[{name,src}] }',
@@ -74,7 +74,7 @@ export function buildAgentManifest(url) {
           web: '*_web.glb merged — Design/World preview (python scripts/build_characters.py)',
           engine: '*_engine.glb named parts — Unreal/Unity; not for browser preview'
         },
-        agent_notes: 'Register derivatives.web + derivatives.engine after blob upload. character.src must use web file only. See docs/KIT_AND_ENGINE_EXPORT.md.',
+        agent_notes: 'After PUT upload both GLBs: derivatives.web (*_web.glb) for preview; derivatives.engine (*_engine.glb) for engines only. Never load engine file in browser. See docs/KIT_AND_ENGINE_EXPORT.md.',
         blob_extensions: 'glb,gltf,fbx,zip,json,png,jpg,wav,unitypackage'
       },
       scan: {
@@ -172,6 +172,7 @@ export function buildAgentTxt(url) {
     'State: GET ' + m.discovery.state,
     'Session: POST /api/sessions ; header X-GameForge-Session',
     'Blobs: PUT/GET /api/blobs/{sessionId}/{file}.glb',
+    'Kit exports: docs/KIT_AND_ENGINE_EXPORT.md — web *_web.glb (preview) vs engine *_engine.glb (Unreal/Unity)',
     'Plan: docs/PLATFORM_PLAN.md',
     '',
     'Asset kinds: voxel | sprite | character | kit (web + engine GLBs)',
@@ -181,7 +182,8 @@ export function buildAgentTxt(url) {
     '',
     'Example: upsert_asset {"name":"crate","kind":"voxel","size":[6,6,6],"seedStarter":true}',
     'Example: upsert_asset {"name":"male hero","kind":"character","model":"male-hero"}',
-    'Example: upsert_asset {"name":"custom rig","kind":"character","src":"/api/blobs/s_abc/hero.glb"}',
+    'Example: upsert_asset {"name":"Belize male","kind":"character","src":"/api/blobs/s_abc/male_belizean_web.glb"}',
+    'Example: upsert_asset {"name":"Belize kit","kind":"kit","derivatives":{"web":{"src":"/api/blobs/s_abc/male_belizean_web.glb"},"engine":{"src":"/api/blobs/s_abc/male_belizean_engine.glb"}}}',
     'Example: paint_voxels {"name":"crate","cells":[{"x":0,"y":0,"z":0,"c":"#e05252"}]}',
     'Example: place {"name":"crate","x":2,"z":3}',
     'Example: test_level {"probes":[{"x":0,"z":0}]}'
