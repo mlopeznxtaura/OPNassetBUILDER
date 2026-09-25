@@ -81,21 +81,37 @@
   <select id="assetKind">
     <option value="voxel">Voxel model (3D)</option>
     <option value="sprite">Sprite (2D pixel art)</option>
-    <option value="character">Character mesh (glTF)</option>
+    <option value="character">Character mesh (web GLB)</option>
+    <option value="kit">Kit (recipe — web + engine exports)</option>
   </select>
   <div id="characterCtl" style="display:none">
     <label>Base mesh</label>
     <select id="characterModel">
       <option value="female-hero">Female hero base (skinned)</option>
       <option value="male-hero">Male hero base (skinned)</option>
-      <option value="custom">Uploaded mesh (session blob)</option>
+      <option value="custom">Uploaded web GLB (session blob)</option>
     </select>
     <div class="row" style="margin-top:8px; flex-wrap:wrap">
-      <button type="button" id="btnImportGlb">Import GLB / GLTF</button>
+      <button type="button" id="btnImportGlb">Import web GLB / GLTF</button>
       <input type="file" id="fileImportGlb" accept=".glb,.gltf,model/gltf-binary" style="display:none">
     </div>
-    <div class="hint">Stock heroes are low-poly mannequins (~1.3k tris). For photogrammetry or kit meshes, import a GLB (≤25 MB) — uploads to your session blob store, then Save.</div>
+    <div class="hint">Use the <strong>web</strong> export (<code>*_web.glb</code>) for preview — not the engine parted file. ≤25 MB → session blob, then Save.</div>
     <div id="characterMeshInfo" class="hint" style="margin-top:6px">Mesh: —</div>
+  </div>
+  <div id="kitCtl" style="display:none">
+    <p class="hint" style="margin:0 0 8px"><strong>Two files per kit</strong> (see <a href="/docs/KIT_AND_ENGINE_EXPORT.md" target="_blank" rel="noopener">export guide</a>): <code>*_web.glb</code> for this app; <code>*_engine.glb</code> for Unreal/Unity only.</p>
+    <div class="row" style="flex-wrap:wrap; gap:8px">
+      <button type="button" id="btnImportKitWeb">Import web GLB (preview)</button>
+      <input type="file" id="fileImportKitWeb" accept=".glb,.gltf" style="display:none">
+      <button type="button" id="btnImportKitEngine">Import engine GLB (parts)</button>
+      <input type="file" id="fileImportKitEngine" accept=".glb,.gltf,.fbx,.zip" style="display:none">
+    </div>
+    <div id="kitMeshInfo" class="hint" style="margin-top:6px">Web: — · Engine: —</div>
+  </div>
+  <div id="exportProfilesBox" class="hint" style="margin-top:12px; padding:10px; border:1px solid var(--line); border-radius:8px; background:#0f1115">
+    <strong>Offline recipe export</strong> (Belize / Trinidad):<br>
+    <code>python scripts/build_characters.py --out assets</code><br>
+    → <code>*_web.glb</code> (browser) + <code>*_engine.glb</code> (engines). Desktop web app target.
   </div>
   <div id="voxelSizeCtl">
     <label>Grid size (X × Y × Z)</label>
@@ -148,6 +164,13 @@
 
   <h2>3D render stats</h2>
   <div id="meshStats" class="stats-panel">—</div>
+
+  <h2>Export profiles</h2>
+  <div class="hint" style="margin-bottom:10px">
+    <strong>library.json</strong> = metadata only (≤800 KB). Meshes live at blob URLs.<br>
+    <strong>web GLB</strong> = merged meshes for Design/World.<br>
+    <strong>engine GLB/FBX/ZIP</strong> = named parts; download via GET <code>/api/blobs/…</code>, not used for viewport.
+  </div>
 
   <h2>Library <span id="libCount" class="badge">0</span></h2>
   <div id="assetList"></div>

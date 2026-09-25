@@ -1,6 +1,7 @@
 import {
   collidesAt,
   createCharacterAsset,
+  createKitAsset,
   createSpriteAsset,
   createVoxelAsset,
   deleteAsset,
@@ -34,13 +35,15 @@ export const TOOLS = [
   },
   {
     name: 'upsert_asset',
-    description: 'Create or replace an asset. kind: voxel|sprite|character. Voxel: name,size,cells,seedStarter (auto humanoid/tree/crate if empty). Character: model female-hero|male-hero, or character.src /assets/*.gltf|.glb. Or pass full asset object.',
+    description: 'Create or replace an asset. kind: voxel|sprite|character|kit. Kit: derivatives.web (merged *_web.glb, browser preview) + derivatives.engine (*_engine.glb, Unreal/Unity). Never point character.src at engine file. Character: model or web src. Or pass full asset object.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string' },
         name: { type: 'string' },
-        kind: { type: 'string', enum: ['voxel', 'sprite', 'character'] },
+        kind: { type: 'string', enum: ['voxel', 'sprite', 'character', 'kit'] },
+        kit: { type: 'object', description: '{ recipe, derivatives:{ web:{src}, engine:{src} }, parts[] }' },
+        derivatives: { type: 'object', description: 'Shorthand for kit.derivatives when kind=kit' },
         model: { type: 'string' },
         src: { type: 'string', description: 'Same-origin character mesh URL under /assets/' },
         collidable: { type: 'boolean' },
@@ -163,7 +166,17 @@ export async function callTool(name, args, store) {
         let asset;
         if (source.kind === 'voxel' && source.voxel) asset = structuredClone(source);
         else if (source.kind === 'sprite' && source.sprite) asset = structuredClone(source);
-        else if (source.kind === 'character' && source.character) asset = structuredClone(source);
+        else if (source.kind === 'kit' && source.kit) asset = structuredClone(source);
+        else if (source.kind === 'kit') {
+          asset = createKitAsset({
+            id: source.id,
+            name: source.name,
+            recipe: source.recipe || (source.kit && source.kit.recipe),
+            derivatives: (source.kit && source.kit.derivatives) || source.derivatives || {},
+            parts: (source.kit && source.kit.parts) || source.parts || [],
+            collidable: source.collidable
+          });
+        } else if (source.kind === 'character' && source.character) asset = structuredClone(source);
         else if (source.kind === 'character') {
           const customSrc = (source.character && source.character.src) || source.src;
           if (customSrc && !isAllowedCharacterSrc(customSrc)) {

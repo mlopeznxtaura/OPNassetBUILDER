@@ -1,4 +1,5 @@
 import { storeBlob, loadBlob, issueUploadUrl } from './workerBlobTiers.js';
+import { contentTypeForBlobFilename, isAllowedBlobFilename } from './shared/engineBlob.js';
 import { blobTierConfigured, blobTierImplementation, parseTierOrder } from './shared/storageTiers.js';
 
 const GLB_MAX = 25 * 1024 * 1024;
@@ -75,10 +76,10 @@ export async function handleBlobs(request, env, url) {
       return json({ ok: false, error: 'session required; use POST /api/sessions then X-GameForge-Session header' }, 401);
     }
     const filename = decodeURIComponent(uploadUrlMatch[2]);
-    if (!/\.(glb|gltf)$/i.test(filename) || filename.includes('..')) {
-      return json({ ok: false, error: 'filename must end with .glb or .gltf' }, 400);
+    if (!isAllowedBlobFilename(filename)) {
+      return json({ ok: false, error: 'filename extension not allowed for engine blobs' }, 400);
     }
-    let contentType = 'model/gltf-binary';
+    let contentType = contentTypeForBlobFilename(filename);
     try {
       const body = await request.json();
       if (body && body.contentType) contentType = String(body.contentType);
@@ -91,12 +92,12 @@ export async function handleBlobs(request, env, url) {
   }
 
   const match = url.pathname.match(/^\/api\/blobs\/(s_[a-zA-Z0-9_-]+)\/([^/]+)$/);
-  if (!match) return json({ ok: false, error: 'path must be /api/blobs/{sessionId}/{filename}.glb' }, 400);
+  if (!match) return json({ ok: false, error: 'path must be /api/blobs/{sessionId}/{filename}' }, 400);
 
   const sessionId = match[1];
   const filename = decodeURIComponent(match[2]);
-  if (!/\.(glb|gltf)$/i.test(filename) || filename.includes('..')) {
-    return json({ ok: false, error: 'filename must end with .glb or .gltf' }, 400);
+  if (!isAllowedBlobFilename(filename)) {
+    return json({ ok: false, error: 'filename extension not allowed for engine blobs' }, 400);
   }
 
   const key = sessionId + '/' + filename;
@@ -122,7 +123,7 @@ export async function handleBlobs(request, env, url) {
     const body = await request.arrayBuffer();
     if (!body.byteLength) return json({ ok: false, error: 'empty body' }, 400);
     if (body.byteLength > GLB_MAX) return json({ ok: false, error: 'file exceeds 25MB limit' }, 413);
-    const contentType = request.headers.get('content-type') || 'model/gltf-binary';
+    const contentType = request.headers.get('content-type') || contentTypeForBlobFilename(filename);
     const backend = await storeBlob(env, key, body, contentType);
     if (!backend) {
       return json({

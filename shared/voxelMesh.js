@@ -107,5 +107,14 @@ function gfBuildAssetMesh(asset) {
     gfLoadCharacterIntoGroup(group, src);
     return group;
   }
+  if (asset.kind === 'kit') {
+    const group = new THREE.Group();
+    group.name = asset.name || 'kit';
+    const preview =
+      (asset.kit && asset.kit.derivatives && asset.kit.derivatives.web && asset.kit.derivatives.web.src) ||
+      ((asset.kit && asset.kit.parts) || []).map(p => p && p.src).find(s => s && /\.(glb|gltf)$/i.test(s));
+    if (preview) gfLoadCharacterIntoGroup(group, preview);
+    return group;
+  }
   throw new Error('unknown asset kind: ' + asset.kind);
 }

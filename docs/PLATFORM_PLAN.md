@@ -44,13 +44,13 @@ Workers at the edge are **stateless**; load spreads by `sessionId` (DO + R2 key 
 
 1. Parametric script (e.g. `build_characters.py`) produces named-part `.glb`.
 2. `POST /api/sessions` (or reuse session).
-3. `PUT /api/blobs/{sessionId}/female-trinidadian.glb` with raw bytes.
-4. `upsert_asset { kind:"character", name, src:"/api/blobs/…/female-trinidadian.glb" }`.
+3. `PUT /api/blobs/…/female_trinidadian_web.glb` and `…_engine.glb` (see `scripts/build_characters.py`).
+4. `upsert_asset { kind:"kit", derivatives:{ web:{src:…}, engine:{src:…} } }` or `kind:"character"` with **web** src only.
 5. Design shows `characterSrc`; World loads via GLTFLoader.
 
-### C. Future: `kind: kit` (not implemented)
+### C. `kind: kit` (engine export)
 
-Recipe params in library JSON; bake step writes GLB to R2; optional rig bind to hero skeleton.
+Recipe params + **derivatives** per target (`web` glTF, `unreal` FBX, `unity` GLB/zip). Binaries via `/api/blobs/…` (FBX, ZIP, etc.). See [KIT_AND_ENGINE_EXPORT.md](./KIT_AND_ENGINE_EXPORT.md). In-browser recipe bake is still future; v1 = upload + register.
 
 ## Ops
 

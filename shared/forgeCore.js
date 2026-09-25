@@ -23,6 +23,7 @@ function clampInt(n, min, max) {
 }
 
 import { isBlobCharacterSrc } from './blobPaths.js';
+import { isAllowedKitSrc, isPreviewableMeshSrc } from './engineBlob.js';
 
 export function isAllowedCharacterSrc(src) {
   if (typeof src !== 'string') return false;
@@ -37,7 +38,9 @@ export function gfValidateAsset(asset) {
   if (!asset || typeof asset !== 'object') return ['asset must be an object'];
   if (!asset.id) errors.push('missing id');
   if (!asset.name) errors.push('missing name');
-  if (asset.kind !== 'voxel' && asset.kind !== 'sprite' && asset.kind !== 'character') errors.push('kind must be voxel, sprite, or character');
+  if (asset.kind !== 'voxel' && asset.kind !== 'sprite' && asset.kind !== 'character' && asset.kind !== 'kit') {
+    errors.push('kind must be voxel, sprite, character, or kit');
+  }
   if (asset.kind === 'voxel') {
     if (!asset.voxel || !Array.isArray(asset.voxel.voxels)) errors.push('voxel data missing');
     else if (!Array.isArray(asset.voxel.size) || asset.voxel.size.length !== 3) errors.push('voxel size missing');
@@ -46,6 +49,26 @@ export function gfValidateAsset(asset) {
   if (asset.kind === 'character') {
     if (!asset.character || !asset.character.src) errors.push('character mesh missing');
     else if (!isAllowedCharacterSrc(asset.character.src)) errors.push('character.src must be /assets/*.gltf or .glb');
+  }
+  if (asset.kind === 'kit') {
+    const kit = asset.kit;
+    if (!kit || typeof kit !== 'object') errors.push('kit data missing');
+    else {
+      const deriv = kit.derivatives && typeof kit.derivatives === 'object' ? kit.derivatives : {};
+      const parts = Array.isArray(kit.parts) ? kit.parts : [];
+      let hasSrc = false;
+      for (const d of Object.values(deriv)) {
+        if (d && d.src && isAllowedKitSrc(d.src)) hasSrc = true;
+        else if (d && d.src) errors.push('kit derivative src not allowed: ' + d.src);
+      }
+      for (const p of parts) {
+        if (p && p.src && isAllowedKitSrc(p.src)) hasSrc = true;
+        else if (p && p.src) errors.push('kit part src not allowed: ' + p.src);
+      }
+      if (!hasSrc) errors.push('kit needs at least one derivatives.*.src or parts[].src');
+      const web = deriv.web && deriv.web.src;
+      if (web && !isPreviewableMeshSrc(web)) errors.push('kit derivatives.web.src must be .glb or .gltf for browser preview');
+    }
   }
   return errors;
 }
@@ -77,6 +100,36 @@ export function createCharacterAsset({ id, name, model = 'female-hero', src, col
     character: { model: catalogModel, src: resolvedSrc, stats: { ...spec.stats } },
     createdAt: Date.now()
   };
+}
+
+export function createKitAsset({
+  id,
+  name,
+  recipe = {},
+  derivatives = {},
+  parts = [],
+  collidable = true
+} = {}) {
+  return {
+    id: id || gfNewId(),
+    name: name || 'kit',
+    kind: 'kit',
+    collidable: collidable !== false,
+    kit: {
+      recipe: recipe && typeof recipe === 'object' ? recipe : {},
+      derivatives: derivatives && typeof derivatives === 'object' ? derivatives : {},
+      parts: Array.isArray(parts) ? parts : []
+    },
+    createdAt: Date.now()
+  };
+}
+
+export function kitWebPreviewSrc(asset) {
+  if (!asset || asset.kind !== 'kit' || !asset.kit) return null;
+  const web = asset.kit.derivatives && asset.kit.derivatives.web;
+  if (web && web.src && isPreviewableMeshSrc(web.src)) return web.src;
+  const part = (asset.kit.parts || []).find(p => p && p.src && isPreviewableMeshSrc(p.src));
+  return part ? part.src : null;
 }
 
 export function createSpriteAsset({ id, name, w = 16, h = 16, collidable = false } = {}) {
@@ -321,6 +374,21 @@ export function computeVoxelMeshStats(asset) {
 
 export function summarizeAsset(asset) {
   if (!asset) return null;
+  if (asset.kind === 'kit') {
+    const deriv = (asset.kit && asset.kit.derivatives) || {};
+    return {
+      id: asset.id,
+      name: asset.name,
+      kind: asset.kind,
+      collidable: !!asset.collidable,
+      recipe: asset.kit && asset.kit.recipe,
+      derivatives: Object.fromEntries(
+        Object.entries(deriv).map(([k, v]) => [k, v && v.src ? { src: v.src, role: k === 'web' ? 'browser_preview' : k === 'engine' ? 'unreal_unity_parts' : k, unit: v.unit, scale: v.scale } : null])
+      ),
+      webPreviewSrc: kitWebPreviewSrc(asset),
+      partCount: (asset.kit && asset.kit.parts && asset.kit.parts.length) || 0
+    };
+  }
   if (asset.kind === 'character') {
     const stats = (asset.character && asset.character.stats) || {};
     const scan = asset.scan

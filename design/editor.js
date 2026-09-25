@@ -5,10 +5,12 @@ import { visualHull } from '../shared/visualHull.js';
 import {
   computeVoxelMeshStats,
   createCharacterAsset,
+  createKitAsset,
   createSpriteAsset,
   createVoxelAsset,
   gfNewId,
   gfValidateAsset,
+  kitWebPreviewSrc,
   seedVoxelStarter
 } from '../shared/forgeCore.js';
 
@@ -87,6 +89,13 @@ function syncCharacterModelSelect() {
   }
 }
 
+function previewMeshSrc(asset) {
+  if (!asset) return null;
+  if (asset.kind === 'character' && asset.character) return asset.character.src;
+  if (asset.kind === 'kit') return kitWebPreviewSrc(asset);
+  return null;
+}
+
 function updateCharacterMeshInfo() {
   const el = document.getElementById('characterMeshInfo');
   if (!el) return;
@@ -97,10 +106,35 @@ function updateCharacterMeshInfo() {
   const src = (current.character && current.character.src) || '—';
   const preset = (current.character && current.character.model) || '—';
   const err = characterLoadError ? ' · load error' : '';
-  el.textContent = 'Preset: ' + preset + ' · Mesh: ' + src + err;
+  el.textContent = 'Web preview: ' + src + ' · preset ' + preset + err;
+}
+
+function updateKitMeshInfo() {
+  const el = document.getElementById('kitMeshInfo');
+  if (!el) return;
+  if (current.kind !== 'kit' || !current.kit) {
+    el.textContent = '';
+    return;
+  }
+  const web = (current.kit.derivatives && current.kit.derivatives.web && current.kit.derivatives.web.src) || '—';
+  const eng = (current.kit.derivatives && current.kit.derivatives.engine && current.kit.derivatives.engine.src) || '—';
+  const err = characterLoadError ? ' · web load error' : '';
+  el.textContent = 'Web (preview): ' + web + ' · Engine (Unreal/Unity): ' + eng + err;
 }
 
 function formatMeshStats(asset) {
+  if (asset && asset.kind === 'kit') {
+    const web = kitWebPreviewSrc(asset) || '—';
+    const eng = (asset.kit && asset.kit.derivatives && asset.kit.derivatives.engine && asset.kit.derivatives.engine.src) || '—';
+    const lines = ['Kit · web ' + web, 'Engine file ' + eng];
+    if (characterLoadError) lines.push(characterLoadError);
+    else if (!viewStats) lines.push('Loading web GLB…');
+    else {
+      lines.push((viewStats.vertices || 0).toLocaleString() + ' vertices');
+      lines.push((viewStats.triangles || 0).toLocaleString() + ' triangles · ' + (viewStats.materials || 0) + ' materials');
+    }
+    return { title: lines[0], lines: lines.slice(1) };
+  }
   if (asset && asset.kind === 'character') {
     const mesh = viewStats || (asset.character && asset.character.stats) || {};
     const pending = !viewStats && !characterLoadError;
@@ -354,7 +388,7 @@ function paintPixel(i, erase) {
 
 function loadAsset(asset) {
   selectedLibId = asset.id;
-  viewStats = asset.kind === 'character' ? null : viewStats;
+  viewStats = (asset.kind === 'character' || asset.kind === 'kit') ? null : viewStats;
   current = JSON.parse(JSON.stringify(asset));
   document.getElementById('assetName').value = current.name || '';
   document.getElementById('assetCollidable').checked = !!current.collidable;
@@ -394,7 +428,7 @@ function rebuildCharacterPreview() {
   characterLoadError = '';
   updateMeshStatsUI();
   clearGroup(voxelHelperGroup);
-  const src = (current.character && current.character.src) || '/assets/female-hero.gltf';
+  const src = previewMeshSrc(current) || '/assets/female-hero.gltf';
   if (!THREE.GLTFLoader) {
     characterLoadError = 'GLTFLoader unavailable';
     viewStats = { vertices: 0, triangles: 0, materials: 0, bones: 0 };
@@ -438,6 +472,9 @@ function readFormNewAsset() {
   const kind = document.getElementById('assetKind').value;
   const collidable = document.getElementById('assetCollidable').checked;
   const useStarter = document.getElementById('seedStarter').checked;
+  if (kind === 'kit') {
+    return createKitAsset({ name, collidable, recipe: current.kit && current.kit.recipe ? current.kit.recipe : {} });
+  }
   if (kind === 'character') {
     const model = modelForName(name);
     document.getElementById('characterModel').value = model;
@@ -459,15 +496,20 @@ function readFormNewAsset() {
 function refreshModeUI() {
   const isVoxel = current.kind === 'voxel';
   const isCharacter = current.kind === 'character';
+  const isKit = current.kind === 'kit';
+  const isMesh = isCharacter || isKit;
   document.getElementById('voxelSizeCtl').style.display = isVoxel ? '' : 'none';
-  document.getElementById('spriteSizeCtl').style.display = isVoxel || isCharacter ? 'none' : '';
+  document.getElementById('spriteSizeCtl').style.display = isVoxel || isMesh ? 'none' : '';
   document.getElementById('characterCtl').style.display = isCharacter ? '' : 'none';
+  document.getElementById('kitCtl').style.display = isKit ? '' : 'none';
   document.getElementById('layerCtl').style.display = isVoxel ? '' : 'none';
-  document.getElementById('spriteEditorWrap').style.display = isVoxel || isCharacter ? 'none' : '';
-  document.getElementById('btnReseed').style.display = isCharacter ? 'none' : '';
-  document.getElementById('seedStarter').parentElement.style.display = isCharacter ? 'none' : '';
+  document.getElementById('spriteEditorWrap').style.display = isVoxel || isMesh ? 'none' : '';
+  document.getElementById('btnReseed').style.display = isMesh ? 'none' : '';
+  document.getElementById('seedStarter').parentElement.style.display = isMesh ? 'none' : '';
   if (isCharacter) syncCharacterModelSelect();
-  if (isCharacter) {
+  updateCharacterMeshInfo();
+  updateKitMeshInfo();
+  if (isMesh) {
     rebuildCharacterPreview();
   } else if (isVoxel) {
     document.getElementById('layerSlider').max = current.voxel.size[1] - 1;
@@ -488,6 +530,8 @@ document.getElementById('assetKind').onchange = (e) => {
     const model = modelForName(name);
     document.getElementById('characterModel').value = model;
     current = createCharacterAsset({ name, model });
+  } else if (e.target.value === 'kit') {
+    current = createKitAsset({ name });
   }
   else current = createSpriteAsset({ name });
   selectedLibId = null;
@@ -539,7 +583,82 @@ function setSessionBadge(sessionId) {
   el.title = 'Session ' + sessionId + ' — library and blobs are isolated to this browser tab';
 }
 
+async function uploadMeshFile(file, labelEl) {
+  const max = 25 * 1024 * 1024;
+  if (file.size > max) {
+    alert('File is too large (' + Math.round(file.size / 1024 / 1024) + ' MB). Limit is 25 MB.');
+    return null;
+  }
+  const prev = labelEl ? labelEl.textContent : '';
+  if (labelEl) labelEl.textContent = 'Uploading ' + file.name + '…';
+  try {
+    await live.ensureSession();
+    const bytes = await file.arrayBuffer();
+    const ct = /\.gltf$/i.test(file.name) ? 'model/gltf+json' : 'model/gltf-binary';
+    const data = await live.uploadBlob(file.name, bytes, ct);
+    setSessionBadge(live.sessionId());
+    if (!remote) {
+      try { await live.state(); remote = true; setStatus('Live'); } catch (err) { /* ignore */ }
+    }
+    return data;
+  } catch (err) {
+    if (labelEl) labelEl.textContent = prev;
+    throw err;
+  }
+}
+
 document.getElementById('btnImportGlb').onclick = () => document.getElementById('fileImportGlb').click();
+document.getElementById('btnImportKitWeb').onclick = () => document.getElementById('fileImportKitWeb').click();
+document.getElementById('btnImportKitEngine').onclick = () => document.getElementById('fileImportKitEngine').click();
+
+document.getElementById('fileImportKitWeb').onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (current.kind !== 'kit') {
+    document.getElementById('assetKind').value = 'kit';
+    current = createKitAsset({ name: document.getElementById('assetName').value.trim() || file.name.replace(/\.(glb|gltf)$/i, '') });
+    refreshModeUI();
+  }
+  const hint = document.getElementById('kitMeshInfo');
+  try {
+    const { src, backend } = await uploadMeshFile(file, hint);
+    if (!current.kit) current.kit = { recipe: {}, derivatives: {}, parts: [] };
+    if (!current.kit.derivatives) current.kit.derivatives = {};
+    current.kit.derivatives.web = { src };
+    dirty = true;
+    viewStats = null;
+    rebuildCharacterPreview();
+    updateKitMeshInfo();
+    if (hint) hint.textContent = 'Web uploaded (' + (backend || 'blob') + '). Engine file optional.';
+  } catch (err) {
+    alert('Web import failed: ' + (err && err.message ? err.message : err));
+  }
+};
+
+document.getElementById('fileImportKitEngine').onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (current.kind !== 'kit') {
+    document.getElementById('assetKind').value = 'kit';
+    current = createKitAsset({ name: document.getElementById('assetName').value.trim() || file.name.replace(/\.[^.]+$/, '') });
+    refreshModeUI();
+  }
+  const hint = document.getElementById('kitMeshInfo');
+  try {
+    const { src, backend } = await uploadMeshFile(file, hint);
+    if (!current.kit) current.kit = { recipe: {}, derivatives: {}, parts: [] };
+    if (!current.kit.derivatives) current.kit.derivatives = {};
+    current.kit.derivatives.engine = { src };
+    dirty = true;
+    updateKitMeshInfo();
+    if (hint) hint.textContent = 'Engine file uploaded (' + (backend || 'blob') + ') — not used for viewport.';
+  } catch (err) {
+    alert('Engine import failed: ' + (err && err.message ? err.message : err));
+  }
+};
+
 document.getElementById('fileImportGlb').onchange = async (e) => {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
@@ -552,19 +671,9 @@ document.getElementById('fileImportGlb').onchange = async (e) => {
     });
     refreshModeUI();
   }
-  const max = 25 * 1024 * 1024;
-  if (file.size > max) {
-    alert('File is too large (' + Math.round(file.size / 1024 / 1024) + ' MB). Limit is 25 MB.');
-    return;
-  }
   const hint = document.getElementById('characterMeshInfo');
-  const prev = hint ? hint.textContent : '';
-  if (hint) hint.textContent = 'Uploading ' + file.name + '…';
   try {
-    await live.ensureSession();
-    const bytes = await file.arrayBuffer();
-    const ct = /\.gltf$/i.test(file.name) ? 'model/gltf+json' : 'model/gltf-binary';
-    const { src, backend } = await live.uploadBlob(file.name, bytes, ct);
+    const { src, backend } = await uploadMeshFile(file, hint);
     const name = document.getElementById('assetName').value.trim() || file.name.replace(/\.(glb|gltf)$/i, '');
     const next = createCharacterAsset({
       id: current.id,
@@ -581,18 +690,8 @@ document.getElementById('fileImportGlb').onchange = async (e) => {
     setSessionBadge(live.sessionId());
     syncCharacterModelSelect();
     rebuildCharacterPreview();
-    if (hint) {
-      hint.textContent = 'Uploaded via ' + (backend || 'blob') + '. Save to library when ready.';
-    }
-    if (!remote) {
-      try {
-        await live.state();
-        remote = true;
-        setStatus('Live');
-      } catch (err) { /* local-only upload may still work if worker reachable */ }
-    }
+    if (hint) hint.textContent = 'Web GLB uploaded (' + (backend || 'blob') + '). Save when ready.';
   } catch (err) {
-    if (hint) hint.textContent = prev;
     alert('Import failed: ' + (err && err.message ? err.message : err));
   }
 };
@@ -656,7 +755,15 @@ function refreshLibraryList() {
     if (a.kind === 'character' && a.character && a.character.src) {
       const sub = document.createElement('div');
       sub.className = 'mesh-src';
-      sub.textContent = a.character.src;
+      sub.textContent = 'web: ' + a.character.src;
+      item.appendChild(sub);
+    }
+    if (a.kind === 'kit' && a.kit && a.kit.derivatives) {
+      const sub = document.createElement('div');
+      sub.className = 'mesh-src';
+      const w = a.kit.derivatives.web && a.kit.derivatives.web.src;
+      const eng = a.kit.derivatives.engine && a.kit.derivatives.engine.src;
+      sub.textContent = 'web: ' + (w || '—') + ' · engine: ' + (eng || '—');
       item.appendChild(sub);
     }
     item.onclick = () => loadAsset(a);

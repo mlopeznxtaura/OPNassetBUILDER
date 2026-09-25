@@ -4,7 +4,9 @@ import {
   collidesAt,
   computeVoxelMeshStats,
   createCharacterAsset,
+  createKitAsset,
   createVoxelAsset,
+  kitWebPreviewSrc,
   gfValidateAsset,
   isAllowedCharacterSrc,
   memoryStore,
@@ -51,6 +53,18 @@ test('character.src must be same-origin under /assets/', () => {
   assert.equal(custom.character.model, 'custom');
   const bad = createCharacterAsset({ name: 'rig', src: 'http://x/a.glb' });
   assert.equal(bad.character.src, '/assets/female-hero.gltf');
+});
+
+test('kit asset validates derivatives and web preview', () => {
+  const kit = createKitAsset({
+    name: 'belize kit',
+    derivatives: {
+      web: { src: '/api/blobs/s_abc/belize.glb' },
+      unreal: { src: '/api/blobs/s_abc/belize.fbx', scale: 100, unit: 'cm' }
+    }
+  });
+  assert.equal(gfValidateAsset(kit).length, 0);
+  assert.equal(kitWebPreviewSrc(kit), '/api/blobs/s_abc/belize.glb');
 });
 
 test('mcp upsert_asset accepts character src override', async () => {

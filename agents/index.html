@@ -39,7 +39,8 @@
   <ul>
     <li><code>POST /api/sessions</code> — new studio; sets <code>gf_session</code> cookie; returns <code>sessionId</code></li>
     <li><code>X-GameForge-Session</code> — send on <code>/api/*</code> and <code>/mcp</code> (browser sets this after session create)</li>
-    <li><code>PUT /api/blobs/{sessionId}/name.glb</code> — upload kit mesh (≤25 MB); then <code>character.src</code> points at that URL</li>
+    <li><code>PUT /api/blobs/{sessionId}/name.glb</code> — upload mesh (≤25 MB). Use <strong>web</strong> GLB for preview; <strong>engine</strong> GLB for Unreal/Unity.</li>
+    <li><code>POST /api/blobs/{sessionId}/file.glb/upload-url</code> — presigned upload (~15 min)</li>
   </ul>
 
   <h2>MCP</h2>
@@ -57,7 +58,8 @@
   <ul>
     <li><strong>voxel</strong> — grid of colored cubes; <code>paint_voxels</code> or <code>upsert_asset</code> with <code>cells</code>. Optional <code>seedStarter</code> for name-based starter mesh.</li>
     <li><strong>sprite</strong> — 2D pixel grid; <code>paint_sprite</code>.</li>
-    <li><strong>character</strong> — <code>character.src</code>: <code>/assets/*.glb</code> or <code>/api/blobs/{sessionId}/*.glb</code> after upload. Presets <code>female-hero</code> / <code>male-hero</code> are catalog pointers only.</li>
+    <li><strong>character</strong> — <code>character.src</code> must be a <strong>web</strong> GLB (<code>/assets/*_web.glb</code> or blob). Presets <code>female-hero</code> / <code>male-hero</code> are catalog pointers only.</li>
+    <li><strong>kit</strong> — <code>kit.derivatives.web</code> (preview) + <code>kit.derivatives.engine</code> (Unreal/Unity parts). Build: <code>python scripts/build_characters.py --out assets</code>. <a href="/docs/KIT_AND_ENGINE_EXPORT.md">KIT_AND_ENGINE_EXPORT.md</a></li>
     <li><strong>scan</strong> — Scan 360: video, frame decode, visual-hull voxel bake; save stores thumbnail + <code>frameCount</code> / <code>hullVoxels</code>.</li>
   </ul>
 

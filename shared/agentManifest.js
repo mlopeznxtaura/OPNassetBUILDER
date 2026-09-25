@@ -68,6 +68,15 @@ export function buildAgentManifest(url) {
         },
         agent_notes: 'character.src must be /assets/*.gltf|.glb OR /api/blobs/{sessionId}/*.glb after PUT upload. Catalog model (female-hero|male-hero) is a preset pointer only. list_assets includes characterSrc. Named-part kits: upload GLB then upsert with src — do not embed binary in library JSON.'
       },
+      kit: {
+        fields: 'id, name, kind:"kit", kit:{ recipe:{}, derivatives:{ web:{src}, engine:{src}, unreal?, unity?, zip? }, parts:[{name,src}] }',
+        export_profiles: {
+          web: '*_web.glb merged — Design/World preview (python scripts/build_characters.py)',
+          engine: '*_engine.glb named parts — Unreal/Unity; not for browser preview'
+        },
+        agent_notes: 'Register derivatives.web + derivatives.engine after blob upload. character.src must use web file only. See docs/KIT_AND_ENGINE_EXPORT.md.',
+        blob_extensions: 'glb,gltf,fbx,zip,json,png,jpg,wav,unitypackage'
+      },
       scan: {
         fields: 'scan?:{ image, capturedAt, width, height, frameCount, hullVoxels? }',
         agent_notes: 'Scan 360: records video, decodes silhouettes, visual-hull bakes voxel mesh in Design. Save keeps thumb + frameCount/hullVoxels. Export scan ZIP includes scan.webm, frames, manifest.json.'
@@ -86,6 +95,7 @@ export function buildAgentManifest(url) {
       endpoints: [
         { method: 'POST', path: '/api/sessions', desc: 'Create session { sessionId, expiresInDays }; Set-Cookie gf_session' },
         { method: 'POST', path: '/api/blobs/{sessionId}/{filename}.glb/upload-url', desc: 'Session-scoped upload URL (~15m): direct to Supabase/S3/OCI when configured, else Worker PUT URL' },
+        { method: 'GET', path: '/docs/KIT_AND_ENGINE_EXPORT.md', desc: 'Web vs engine GLB export profiles for recipe kits' },
         { method: 'PUT', path: '/api/blobs/{sessionId}/{filename}.glb', desc: 'Upload mesh bytes (auth: session header/cookie must match sessionId). Returns { src, backend }' },
         { method: 'GET', path: '/api/blobs/{sessionId}/{filename}.glb', desc: 'Download mesh from R2' },
         { method: 'GET', path: '/api/health', desc: 'ok, app_id, revision, asset count' },
@@ -119,9 +129,18 @@ export function buildAgentManifest(url) {
         name: 'Upload kit GLB and register character',
         steps: [
           'POST /api/sessions (or reuse GAMEFORGE_SESSION)',
-          'PUT /api/blobs/{sessionId}/hero.glb with Content-Type model/gltf-binary and X-GameForge-Session',
-          'upsert_asset { name:"hero", kind:"character", src:"/api/blobs/{sessionId}/hero.glb" }',
+          'PUT /api/blobs/{sessionId}/hero_web.glb (merged web export)',
+          'upsert_asset { name:"hero", kind:"character", src:"/api/blobs/{sessionId}/hero_web.glb" }',
           'place { name:"hero", x:0, z:0 }'
+        ]
+      },
+      {
+        name: 'Belize/Trinidad kit (web + engine)',
+        steps: [
+          'python scripts/build_characters.py --out assets (or upload both GLBs to blobs)',
+          'PUT …/male_belizean_web.glb and PUT …/male_belizean_engine.glb',
+          'upsert_asset { kind:"kit", name:"Belize male", kit:{ recipe:{gender:"male"}, derivatives:{ web:{src:"…_web.glb"}, engine:{src:"…_engine.glb"} } } }',
+          'place uses kit.derivatives.web for preview'
         ]
       }
     ],
@@ -135,7 +154,8 @@ export function buildAgentManifest(url) {
       storage_setup: '/docs/STORAGE_SETUP.md',
       storage_tiers: '/docs/STORAGE_TIERS.md',
       storage_oauth_wizard: 'npm run setup:storage:oauth — Supabase/Mongo/Vercel/AWS browser OAuth; npm run setup:oci when Oracle tenancy is live',
-      oracle_setup: '/docs/ORACLE_OCI_SETUP.md'
+      oracle_setup: '/docs/ORACLE_OCI_SETUP.md',
+      kit_and_engines: '/docs/KIT_AND_ENGINE_EXPORT.md'
     }
   };
 }
@@ -154,7 +174,7 @@ export function buildAgentTxt(url) {
     'Blobs: PUT/GET /api/blobs/{sessionId}/{file}.glb',
     'Plan: docs/PLATFORM_PLAN.md',
     '',
-    'Asset kinds: voxel | sprite | character',
+    'Asset kinds: voxel | sprite | character | kit (web + engine GLBs)',
     'Character models: female-hero, male-hero',
     '',
     'MCP tools: ' + m.mcp.tools.map(t => t.name).join(', '),
