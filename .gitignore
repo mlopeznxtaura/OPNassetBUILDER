@@ -7,5 +7,6 @@ wrangler.secrets.env
 credentials.json
 node_modules/
 .wrangler/
+.tmp_video_frames/
 .DS_Store
 Thumbs.db
