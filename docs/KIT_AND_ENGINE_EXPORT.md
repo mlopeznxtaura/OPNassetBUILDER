@@ -62,4 +62,6 @@ Extensions for engine bundles: see `shared/engineBlob.js` (fbx, zip, unitypackag
 
 Design → **Kit (recipe)** or **Character** → **Import web GLB** = preview file. Engine file is uploaded separately and listed under kit derivatives (not previewed as 200 meshes).
 
+**Scan 360** in Design produces a low-res voxel hull from webcam silhouettes — not the same quality ceiling as this recipe. Use kits for Belize/Trinidad heroes; use Scan for quick props or body-scale blockouts.
+
 See also [PLATFORM_PLAN.md](./PLATFORM_PLAN.md) pipeline B.

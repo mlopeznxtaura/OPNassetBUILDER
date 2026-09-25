@@ -89,6 +89,92 @@ def ell(c, r, sub=2):
     return m
 
 
+# ------------------------------------------------------- sculpted face mesh
+def _bump(dirv, center, sigma, amount):
+    c = S(center)
+    c = c / np.linalg.norm(c)
+    sg = S(sigma)
+    diff = (dirv - c) / sg
+    return amount * np.exp(-0.5 * float(diff @ diff))
+
+
+def face_features(M):
+    """Anatomical bump/indent field in head-local unit-sphere space."""
+    feats = []
+
+    def add(cx, cy, cz, sx, sy, sz, amt, mirror=True):
+        feats.append(((cx, cy, cz), (sx, sy, sz), amt))
+        if mirror and cx != 0:
+            feats.append(((-cx, cy, cz), (sx, sy, sz), amt))
+
+    add(0, 0.55, 0.66, 0.34, 0.24, 0.34, 0.012, mirror=False)
+    add(0.42, 0.33, 0.84, 0.27, 0.095, 0.30, 0.046 if M else 0.021)
+    add(0.40, 0.10, 0.90, 0.155, 0.125, 0.17, -0.058)
+    add(0.55, 0.30, 0.33, 0.20, 0.17, 0.22, -0.040)
+    add(0.63, -0.10, 0.60, 0.22, 0.16, 0.27, 0.034 if M else 0.050)
+    add(0, 0.06, 0.97, 0.085, 0.30, 0.15, 0.115 if M else 0.075)
+    add(0, -0.16, 1.06, 0.095, 0.085, 0.12, 0.145 if M else 0.100)
+    add(0.11, -0.21, 0.93, 0.065, 0.06, 0.10, 0.050)
+    add(0, -0.40, 0.90, 0.13, 0.09, 0.16, -0.022, mirror=False)
+    add(0, -0.58, 0.91, 0.23, 0.065, 0.14, 0.018 if M else 0.032, mirror=False)
+    add(0.68, -0.35, 0.52, 0.17, 0.14, 0.20, -0.022)
+    add(0, -0.86, 0.66, 0.155, 0.135, 0.19, 0.052 if M else 0.030)
+    add(0.72, -0.56, 0.36, 0.155, 0.17, 0.21, 0.032 if M else -0.006)
+    return feats
+
+
+def _disp_field(feats):
+    def disp(dirv):
+        return sum(_bump(dirv, c, sg, a) for c, sg, a in feats)
+    return disp
+
+
+def sculpt_ellipsoid(radii, feats, nlat=24, nlong=32):
+    """UV-sphere ellipsoid with gaussian displacement; returns mesh + surf() for attachments."""
+    S3 = S(radii)
+    disp = _disp_field(feats)
+
+    def surf(dx, dy, dz, push=1.0):
+        dirv = S((dx, dy, dz))
+        dirv = dirv / np.linalg.norm(dirv)
+        return dirv * S3 * (1 + disp(dirv) * push)
+
+    V = []
+    top = S((0, 1, 0))
+    V.append(top * S3 * (1 + disp(top)))
+    rings = []
+    for i in range(1, nlat):
+        theta = i / nlat * np.pi
+        row = []
+        for j in range(nlong):
+            phi = j / nlong * 2 * np.pi
+            dirv = S((np.sin(theta) * np.sin(phi), np.cos(theta), np.sin(theta) * np.cos(phi)))
+            V.append(dirv * S3 * (1 + disp(dirv)))
+            row.append(len(V) - 1)
+        rings.append(row)
+    bot = S((0, -1, 0))
+    V.append(bot * S3 * (1 + disp(bot)))
+    bot_i = len(V) - 1
+
+    F = []
+    r0 = rings[0]
+    for j in range(nlong):
+        j2 = (j + 1) % nlong
+        F.append([0, r0[j2], r0[j]])
+    for r in range(len(rings) - 1):
+        a_row, b_row = rings[r], rings[r + 1]
+        for j in range(nlong):
+            j2 = (j + 1) % nlong
+            a, b, c, d = a_row[j], a_row[j2], b_row[j], b_row[j2]
+            F += [[a, c, b], [b, c, d]]
+    rlast = rings[-1]
+    for j in range(nlong):
+        j2 = (j + 1) % nlong
+        F.append([bot_i, rlast[j], rlast[j2]])
+    m = trimesh.Trimesh(np.array(V), np.array(F), process=False)
+    return m, surf
+
+
 def box(c, e, rot=None):
     m = trimesh.creation.box(extents=S(e))
     if rot is not None:
@@ -246,29 +332,42 @@ def build(gender):
 
     hc = S((0, Y(1.72), 0.012))
     Hp = lambda dx, dy, dz: hc + hs * S((dx, dy, dz))
-    rig.add('Head', 'head', ell(hc, hs * S((0.087, 0.108, 0.100)), 3), skin)
-    rig.add('Head', 'jaw', ell(Hp(0, -0.078, 0.052), hs * S((0.058 if M else 0.050, 0.046, 0.052)), 2), skin)
-    rig.add('Head', 'nose', ell(Hp(0, -0.020, 0.098), hs * S((0.013, 0.022, 0.018)), 2), skin)
+    head_r = hs * S((0.089, 0.112, 0.104))
+    head_mesh, surf = sculpt_ellipsoid(head_r, face_features(M), nlat=30, nlong=36)
+    head_mesh.apply_translation(hc)
+    rig.add('Head', 'head', head_mesh, skin)
+
     for sg in (1, -1):
         sd = 'L' if sg > 0 else 'R'
-        rig.add('Head', f'nostril_wing_{sd}', ell(Hp(sg * 0.012, -0.036, 0.097), hs * S((0.009, 0.008, 0.009)), 2), skin)
-        rig.add('Head', f'ear_{sd}', ell(Hp(sg * 0.087, -0.002, -0.005), hs * S((0.010, 0.028, 0.020)), 2), skin_dark)
-        rig.add('Head', f'ear_inner_{sd}', ell(Hp(sg * 0.088, -0.002, -0.001), hs * S((0.005, 0.017, 0.012)), 1), skin)
-        rig.add('Head', f'eye_white_{sd}', ell(Hp(sg * 0.036, 0.012, 0.088), hs * S((0.014, 0.010, 0.008)), 2), eye_w)
-        rig.add('Head', f'iris_{sd}', ell(Hp(sg * 0.036, 0.012, 0.094), hs * S((0.0065, 0.0065, 0.004)), 2), iris)
-        rig.add('Head', f'eyelid_{sd}', box(Hp(sg * 0.036, 0.021, 0.089), hs * S((0.018, 0.005, 0.010)),
-                                             rotz(-sg * 4)), skin)
-        rig.add('Head', f'brow_{sd}', box(Hp(sg * 0.037, 0.040, 0.086), hs * S((0.034, 0.007, 0.010)),
-                                            rotz(-sg * (8 if M else 14))), hair_m)
-        rig.add('Head', f'cheekbone_{sd}', ell(Hp(sg * 0.058, -0.018, 0.066), hs * S((0.024, 0.020, 0.026)), 2), skin)
+        nostril = hc + surf(sg * 0.11, -0.21, 0.93)
+        rig.add('Head', f'nostril_wing_{sd}', ell(nostril, hs * S((0.009, 0.008, 0.009)), 2), skin)
+        rig.add('Head', f'nostril_hole_{sd}', ell(hc + surf(sg * 0.075, -0.24, 0.97, push=0.55), hs * S((0.0055, 0.006, 0.007)), 1), skin_dark)
+
+        ear_base = hc + surf(sg * 1.02, -0.02, -0.06)
+        rig.add('Head', f'ear_{sd}', ell(ear_base, hs * S((0.011, 0.030, 0.021)), 2), skin_dark)
+        rig.add('Head', f'ear_inner_{sd}', ell(ear_base + hs * S((sg * 0.006, 0, 0.004)), hs * S((0.006, 0.018, 0.013)), 1), skin)
+        rig.add('Head', f'earlobe_{sd}', ell(ear_base + hs * S((0, -0.026, 0)), hs * S((0.008, 0.009, 0.008)), 1), skin_dark)
+
+        eye_c = hc + surf(sg * 0.40, 0.10, 0.90, push=0.62)
+        rig.add('Head', f'eye_white_{sd}', ell(eye_c, hs * S((0.0135, 0.0095, 0.0075)), 2), eye_w)
+        rig.add('Head', f'iris_{sd}', ell(eye_c + hs * S((0, 0, 0.006)), hs * S((0.0062, 0.0062, 0.0038)), 2), iris)
+        rig.add('Head', f'pupil_{sd}', ell(eye_c + hs * S((0, 0, 0.0095)), hs * S((0.0028, 0.0028, 0.002)), 1), mat('pupil_black', '#050505', 0.15))
+        lid_c = hc + surf(sg * 0.40, 0.185, 0.905)
+        rig.add('Head', f'eyelid_upper_{sd}', box(lid_c, hs * S((0.020, 0.005, 0.011)), rotz(-sg * 6)), skin)
+        lid_lo = hc + surf(sg * 0.40, 0.025, 0.905)
+        rig.add('Head', f'eyelid_lower_{sd}', box(lid_lo, hs * S((0.018, 0.0035, 0.009)), rotz(-sg * 3)), skin)
+        brow_c = hc + surf(sg * 0.42, 0.335, 0.855, push=1.05)
+        rig.add('Head', f'brow_{sd}', box(brow_c, hs * S((0.032, 0.0068, 0.011)),
+                                           rotz(-sg * (9 if M else 15))), hair_m)
         rig.add('Neck', f'collarbone_{sd}', ell((sg * 0.062 * wsh, Y(1.475), 0.044), (0.045, 0.014, 0.020), 2), skin)
-    rig.add('Head', 'upper_lip', ell(Hp(0, -0.058, 0.088), hs * S((0.024, 0.008, 0.010)), 2), lips)
-    rig.add('Head', 'lower_lip', ell(Hp(0, -0.069, 0.086), hs * S((0.020, 0.007, 0.009)), 2), lips)
-    rig.add('Head', 'chin', ell(Hp(0, -0.096, 0.058), hs * S((0.030, 0.020, 0.028)), 2), skin)
+
+    rig.add('Head', 'upper_lip', ell(hc + surf(0, -0.545, 0.905), hs * S((0.025, 0.0078, 0.0105)), 2), lips)
+    rig.add('Head', 'lower_lip', ell(hc + surf(0, -0.635, 0.895), hs * S((0.021, 0.0072, 0.0095)), 2), lips)
+    rig.add('Head', 'lip_philtrum', ell(hc + surf(0, -0.47, 0.94, push=0.6), hs * S((0.006, 0.010, 0.006)), 1), skin)
 
     if M:
         # short crop + full beard + moustache
-        rig.add('Head', 'hair_crop', ell(hc + S((0, 0.038, -0.022)), S((0.093, 0.086, 0.106)), 3), hair_m)
+        rig.add('Head', 'hair_crop', ell(hc + S((0, 0.024, -0.016)), S((0.103, 0.101, 0.122)), 3), hair_m)
         rig.add('Head', 'beard', ell(Hp(0, -0.090, 0.055), S((0.068, 0.046, 0.062)), 2), hair_m)
         rig.add('Head', 'beard_sides', ell(Hp(0, -0.045, 0.02), S((0.090, 0.055, 0.075)), 2), hair_m)
         rig.add('Head', 'moustache', box(Hp(0, -0.046, 0.094), S((0.048, 0.008, 0.012)), None), hair_m)

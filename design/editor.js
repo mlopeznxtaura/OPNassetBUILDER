@@ -1238,7 +1238,7 @@ document.getElementById('btnCapture').onclick = () => {
   current.scan = { image: canvas.toDataURL('image/jpeg', 0.82), capturedAt: Date.now(), width: canvas.width, height: canvas.height };
   showScanStill(current.scan.image);
   markDirty();
-  document.getElementById('scanHint').textContent = 'Captured ' + canvas.width + '×' + canvas.height + '. Save to library keeps this reference on the asset.';
+  document.getElementById('scanHint').textContent = 'Reference photo ' + canvas.width + '×' + canvas.height + ' (2D only). For 3D use Scan 360 → Bake voxel mesh.';
 };
 
 function scanForPersistence(scan) {

@@ -223,10 +223,11 @@
             <img id="scanPreview" alt="Captured scan reference">
           </div>
           <div id="scanPrimary">
-            <button class="primary" id="btnCapture" disabled>Capture</button>
+            <button id="btnCapture" disabled title="2D thumbnail only — not a 3D mesh">Reference photo</button>
             <button class="primary" id="btnScan360" disabled>Scan 360</button>
-            <button id="btnBakeScan" disabled>Bake mesh</button>
+            <button class="primary" id="btnBakeScan" disabled>Bake voxel mesh</button>
           </div>
+          <p class="hint" style="margin:8px 0 0;font-size:11px">For hero-quality characters use <strong>Kit</strong> + <code>npm run build:characters</code> — Scan builds a rough voxel hull only.</p>
         </div>
         <aside id="scanRail">
           <label for="scanCamera">Camera</label>
