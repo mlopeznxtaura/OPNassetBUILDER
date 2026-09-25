@@ -1,5 +1,7 @@
 .git
 .git/**
+.secrets.local
+.secrets.local.*
 .wrangler
 .wrangler/**
 .cursor
