@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "gameforge": {
+    "opnassetbuilder": {
       "command": "node",
       "args": ["mcp/stdio.js"],
       "env": {
-        "GAMEFORGE_ORIGIN": "https://app14.nextaura.us"
+        "OPNASSETBUILDER_ORIGIN": "https://app14.nextaura.us"
       }
     }
   }

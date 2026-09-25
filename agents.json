@@ -1,5 +1,5 @@
 {
-  "project": "GameForge",
+  "project": "OPNassetBUILDER",
   "version": 1,
   "description": "Open-source two-stage (design/visualize -> render/test) game asset pipeline. Gaps below are the delta between this delivered baseline and a production-grade tool.",
   "delivered": [
@@ -162,7 +162,7 @@
           "id": "test1",
           "desc": "`node --test shared/*.test.js` exits 0 with at least one passing assertion per exported pure function.",
           "type": "unit",
-          "how": "Run `node --test` from the gameforge/ directory once test files exist."
+          "how": "Run `npm test` from the OPNassetBUILDER repo root."
         },
         {
           "id": "test2",

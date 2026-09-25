@@ -1,4 +1,4 @@
-# OPNassetBUILDER (GameForge)
+# OPNassetBUILDER
 
 GitHub: [mlopeznxtaura/OPNassetBUILDER](https://github.com/mlopeznxtaura/OPNassetBUILDER)
 
@@ -48,7 +48,7 @@ Pushes to `main` also deploy via GitHub Actions when repo secrets
 ## File layout
 
 ```
-gameforge/
+OPNassetBUILDER/
   shared/assetFormat.js   asset & level JSON schema + save/load/import/export helpers
   shared/voxelMesh.js      converts an asset (voxel or sprite) into a three.js Object3D
   design/index.html        Stage 1 tool
@@ -64,7 +64,7 @@ gameforge/
 - **Ops**: [docs/STORAGE_SETUP.md](docs/STORAGE_SETUP.md) — Wrangler OAuth, R2 buckets, optional MongoDB Atlas M0
 - **Session**: `POST /api/sessions` → per-user studio; header `X-GameForge-Session` on API/MCP
 - **Blobs**: `PUT /api/blobs/{sessionId}/file.glb` (tiered storage) — use **web** GLB path as `character.src` or `kit.derivatives.web`; **engine** GLB as `kit.derivatives.engine` only
-- **MCP**: `POST /mcp` (JSON-RPC). Stdio: `GAMEFORGE_ORIGIN` + `GAMEFORGE_SESSION` → `node mcp/stdio.js`
+- **MCP**: `POST /mcp` (JSON-RPC). Stdio: `OPNASSETBUILDER_ORIGIN` + `OPNASSETBUILDER_SESSION` (or legacy `GAMEFORGE_*`) → `node mcp/stdio.js`
 
 Tools: `list_assets`, `get_asset`, `upsert_asset`, `paint_voxels`, `paint_sprite`, `delete_asset`, `get_level`, `place`, `remove_placement`, `clear_level`, `test_level`.
 

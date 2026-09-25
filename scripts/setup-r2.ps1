@@ -1,5 +1,5 @@
 # OPNassetBUILDER — Cloudflare R2 + Wrangler (run in PowerShell)
-# Right-click → Run with PowerShell, or:  cd gameforgev1\scripts  ;  .\setup-r2.ps1
+# Right-click → Run with PowerShell, or:  cd OPNassetBUILDER\scripts  ;  .\setup-r2.ps1
 
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path

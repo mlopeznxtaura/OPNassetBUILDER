@@ -1,5 +1,8 @@
-const origin = process.env.GAMEFORGE_ORIGIN || 'https://app14.nextaura.us';
-const session = process.env.GAMEFORGE_SESSION || '';
+const origin =
+  process.env.OPNASSETBUILDER_ORIGIN ||
+  process.env.GAMEFORGE_ORIGIN ||
+  'https://app14.nextaura.us';
+const session = process.env.OPNASSETBUILDER_SESSION || process.env.GAMEFORGE_SESSION || '';
 
 function send(obj) {
   const payload = Buffer.from(JSON.stringify(obj), 'utf8');

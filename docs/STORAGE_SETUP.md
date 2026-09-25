@@ -35,7 +35,7 @@ Provider caps (512 MB Mongo, 1 GB Supabase) are **hard ceilings** — the app li
 Remove a broken user env token (we removed `CLOUDFLARE_API_TOKEN` from your Windows user profile once; new terminals should be clean):
 
 ```powershell
-cd f:\NextAuraMonth7getrichordietryin\gameforgev1
+cd path\to\OPNassetBUILDER
 Remove-Item Env:CLOUDFLARE_API_TOKEN -ErrorAction SilentlyContinue
 npx wrangler login
 npx wrangler whoami
