@@ -7,14 +7,16 @@
 <style>
   :root { --bg:#111318; --panel:#1a1d24; --line:#2a2e38; --text:#e8e9ec; --accent:#5cc8ff; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); display:flex; height:100vh; overflow:auto; }
-  #sidebar { width:300px; flex:0 0 300px; background:var(--panel); border-right:1px solid var(--line); padding:14px; overflow-y:auto; }
-  #main { flex:1 0 360px; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); display:flex; height:100vh; overflow:hidden; }
+  #scanSection { flex:0 0 min(38vw, 480px); min-width:280px; max-width:520px; display:flex; flex-direction:column; background:#10131a; border-right:1px solid var(--line); min-height:0; height:100vh; order:1; }
+  #scanSection #scanBody { flex:1; min-height:0; }
+  #scanSection .step-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; padding:14px 14px 0; }
+  #scanSection h2 { margin:0 0 10px; padding:0 14px; font-size:12px; }
+  #sidebar { width:300px; flex:0 0 300px; background:var(--panel); border-left:1px solid var(--line); padding:14px; overflow-y:auto; order:3; }
+  #main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; order:2; }
   #mainBody { flex:1; display:flex; min-height:0; min-width:0; }
   #toolbar { display:flex; gap:8px; padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line); align-items:center; flex-wrap:wrap; }
   #viewport { flex:1; min-width:0; min-height:0; position:relative; background:#14161c; }
-  #scanSection { flex:0 0 min(42vw, 520px); min-width:300px; max-width:560px; display:flex; flex-direction:column; background:#10131a; border-left:1px solid var(--line); min-height:0; }
-  #scanSection h2 { margin:14px 0 10px; padding:0 14px; }
   #scanBody { flex:1; display:flex; min-height:0; }
   #scanCenter { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px 10px 14px; gap:12px; }
   #scanFrame { width:100%; max-width:420px; flex:1; min-height:120px; max-height:min(52vh, 520px); display:flex; align-items:center; justify-content:center; position:relative; }
@@ -26,7 +28,8 @@
   #scanIdle { font-size:12px; color:#6b7280; text-align:center; padding:24px 16px; border:1px dashed var(--line); border-radius:10px; width:100%; max-width:420px; }
   #scanPrimary { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; width:100%; max-width:420px; }
   #scanPrimary button { flex:1; min-width:120px; padding:10px 14px; font-size:13px; }
-  #scanRail { flex:0 0 168px; padding:12px 12px 14px; border-left:1px solid var(--line); overflow-y:auto; background:var(--panel); }
+  #scanRail { flex:0 0 168px; padding:12px 12px 14px; border-left:1px solid var(--line); overflow-y:auto; background:var(--panel); min-height:0; }
+  #sidebar .step-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; }
   #scanRail label { margin-top:0; }
   #scanRail button { width:100%; margin-top:8px; }
   #scanRail #scanHint { margin-top:12px; }
@@ -67,7 +70,53 @@
 </head>
 <body>
 
+<section id="scanSection" aria-label="Body scan">
+  <p class="step-label">Step 1 · optional</p>
+  <h2>Scan 360</h2>
+  <div id="scanBody">
+    <div id="scanCenter">
+      <div id="scanFrame">
+        <div id="scanIdle">Start the webcam to see the body guide. Step back until the outline turns green.</div>
+        <div id="scanStage">
+          <video id="scanVideo" autoplay playsinline muted></video>
+          <canvas id="scanGuide"></canvas>
+        </div>
+        <img id="scanPreview" alt="Captured scan reference">
+      </div>
+      <div id="scanPrimary">
+        <button id="btnCapture" disabled title="2D thumbnail only — not a 3D mesh">Reference photo</button>
+        <button class="primary" id="btnScan360" disabled>Scan 360</button>
+        <button class="primary" id="btnBakeScan" disabled>Bake voxel mesh</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0;font-size:11px;max-width:420px;text-align:center">Rough voxel hull from webcam. For hero kits use <strong>Step 2 → Kit</strong> + offline recipe.</p>
+    </div>
+    <aside id="scanRail">
+      <label for="scanCamera">Camera</label>
+      <select id="scanCamera" disabled>
+        <option value="">Default camera</option>
+      </select>
+      <button id="btnCamera">Start webcam</button>
+      <button id="btnExportScan" disabled>Export scan ZIP</button>
+      <div id="scanHint" class="hint">On Mac, iPhone may appear in the camera list. Windows Phone USB is not a PC webcam — open this page on the phone browser to use its camera.</div>
+    </aside>
+  </div>
+</section>
+
+<div id="main">
+  <div id="toolbar">
+    <span style="font-size:12px;color:#9aa1ad">Live preview — drag to orbit, click to paint, scroll to zoom</span>
+    <span id="syncStatus" class="badge">...</span>
+    <span id="sessionBadge" class="badge" title="Studio session id" style="display:none"></span>
+    <span id="toolbarStats" class="stats-inline"></span>
+  </div>
+  <div id="bootError"></div>
+  <div id="mainBody">
+    <div id="viewport"></div>
+  </div>
+</div>
+
 <div id="sidebar">
+  <p class="step-label">Step 2 · build &amp; library</p>
   <h1>OPNassetBUILDER - Design</h1>
   <div class="row" style="justify-content:space-between">
     <span class="badge">Stage 1 / 2</span>
@@ -184,7 +233,7 @@
     </tbody>
   </table>
   <div class="hint" style="padding:10px; border:1px solid var(--line); border-radius:8px; background:#0f1115">
-    <strong>Offline recipe</strong> (Belize / Trinidad): <code>python scripts/build_characters.py --out assets</code> or <code>npm run build:characters</code> → upload both GLBs, register as <strong>Kit</strong> above. Desktop web target (no mobile preview requirement).
+    <strong>Offline recipe</strong> (Belize / Trinidad): <code>npm run build:characters</code> → <code>npm run upload:kit-blobs</code> → register as <strong>Kit</strong> above.
   </div>
 
   <h2>Library <span id="libCount" class="badge">0</span></h2>
@@ -197,49 +246,6 @@
   <div class="row" style="margin-top:6px">
     <button id="btnDelete" class="danger">Delete selected</button>
     <button id="btnDuplicate">Duplicate</button>
-  </div>
-</div>
-
-<div id="main">
-  <div id="toolbar">
-    <span style="font-size:12px;color:#9aa1ad">Live preview — drag to orbit, click to paint, scroll to zoom</span>
-    <span id="syncStatus" class="badge">...</span>
-    <span id="sessionBadge" class="badge" title="Studio session id" style="display:none"></span>
-    <span id="toolbarStats" class="stats-inline"></span>
-  </div>
-  <div id="bootError"></div>
-  <div id="mainBody">
-    <div id="viewport"></div>
-    <section id="scanSection" aria-label="Body scan">
-      <h2>Scan</h2>
-      <div id="scanBody">
-        <div id="scanCenter">
-          <div id="scanFrame">
-            <div id="scanIdle">Start the webcam to see the body guide. Step back until the outline turns green.</div>
-            <div id="scanStage">
-              <video id="scanVideo" autoplay playsinline muted></video>
-              <canvas id="scanGuide"></canvas>
-            </div>
-            <img id="scanPreview" alt="Captured scan reference">
-          </div>
-          <div id="scanPrimary">
-            <button id="btnCapture" disabled title="2D thumbnail only — not a 3D mesh">Reference photo</button>
-            <button class="primary" id="btnScan360" disabled>Scan 360</button>
-            <button class="primary" id="btnBakeScan" disabled>Bake voxel mesh</button>
-          </div>
-          <p class="hint" style="margin:8px 0 0;font-size:11px">For hero-quality characters use <strong>Kit</strong> + <code>npm run build:characters</code> — Scan builds a rough voxel hull only.</p>
-        </div>
-        <aside id="scanRail">
-          <label for="scanCamera">Camera</label>
-          <select id="scanCamera" disabled>
-            <option value="">Default camera</option>
-          </select>
-          <button id="btnCamera">Start webcam</button>
-          <button id="btnExportScan" disabled>Export scan ZIP</button>
-          <div id="scanHint" class="hint">On Mac, iPhone may appear in the camera list. Windows Phone USB is not a PC webcam — open this page on the phone browser to use its camera.</div>
-        </aside>
-      </div>
-    </section>
   </div>
 </div>
 
